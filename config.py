@@ -1,0 +1,3 @@
+
+# Replace 'YOUR_TELEGRAM_BOT_TOKEN' with your actual bot token
+TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'
