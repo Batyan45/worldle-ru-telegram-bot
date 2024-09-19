@@ -3,6 +3,26 @@
 import logging
 from telegram import Update
 from config import TELEGRAM_BOT_TOKEN
+from strings import (
+    START_MESSAGE,
+    NO_USERNAME_MESSAGE,
+    NEW_GAME_MESSAGE,
+    NO_USERNAME_NEW_GAME_MESSAGE,
+    SECOND_PLAYER_NOT_STARTED_MESSAGE,
+    WORD_PROMPT_MESSAGE,
+    INVALID_WORD_MESSAGE,
+    WORD_SET_MESSAGE,
+    GUESS_PROMPT_MESSAGE,
+    NO_ACTIVE_GAME_MESSAGE,
+    INVALID_GUESS_MESSAGE,
+    ATTEMPT_MESSAGE,
+    GUESSER_WIN_MESSAGE,
+    WORD_SETTER_WIN_MESSAGE,
+    OUT_OF_ATTEMPTS_MESSAGE,
+    WORD_SETTER_LOSS_MESSAGE,
+    TRY_AGAIN_MESSAGE,
+    CANCEL_MESSAGE,
+)
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -37,12 +57,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if username:
         user_chat_ids[username] = chat_id
         await update.message.reply_text(
-            "Привет! Это игра для двух игроков в стиле Wordle.\n"
-            "Используй команду /new_game, чтобы начать новую игру."
+            START_MESSAGE
         )
     else:
         await update.message.reply_text(
-            "Привет! Пожалуйста, установи username в Telegram, чтобы использовать этого бота."
+            NO_USERNAME_MESSAGE
         )
 
 
@@ -51,14 +70,10 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     username = user.username
     if not username:
-        await update.message.reply_text(
-            "Пожалуйста, установи username в Telegram, чтобы использовать этого бота."
-        )
+        await update.message.reply_text(NO_USERNAME_NEW_GAME_MESSAGE)
         return ConversationHandler.END
 
-    await update.message.reply_text(
-        "Отправь @username второго игрока, с которым хочешь сыграть."
-    )
+    await update.message.reply_text(NEW_GAME_MESSAGE)
     return WAITING_FOR_SECOND_PLAYER
 
 
@@ -71,7 +86,7 @@ async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if second_player_username not in user_chat_ids:
         await update.message.reply_text(
-            f"Игрок {second_player} ещё не начал диалог с ботом. Попроси его отправить команду /start боту."
+            SECOND_PLAYER_NOT_STARTED_MESSAGE.format(second_player=second_player)
         )
         return WAITING_FOR_SECOND_PLAYER
 
@@ -92,7 +107,7 @@ async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
 
     await update.message.reply_text(
-        f"Отлично! Теперь, {word_setter_username}, загадай слово из 5 букв."
+        WORD_PROMPT_MESSAGE.format(word_setter_username=word_setter_username)
     )
     return WAITING_FOR_WORD
 
@@ -101,7 +116,7 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Получение загаданного слова и начало игры"""
     word = update.message.text.strip().lower()
     if len(word) != 5 or not word.isalpha():
-        await update.message.reply_text("Слово должно состоять из 5 букв. Попробуй снова.")
+        await update.message.reply_text(INVALID_WORD_MESSAGE)
         return WAITING_FOR_WORD
 
     word_setter_username = context.user_data['word_setter_username']
@@ -111,13 +126,13 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if game and game['state'] == 'waiting_for_word':
         game['secret_word'] = word
         game['state'] = 'waiting_for_guess'
-        await update.message.reply_text("Слово загадано!")
+        await update.message.reply_text(WORD_SET_MESSAGE)
 
         # Отправляем сообщение угадывающему
         guesser_chat_id = game['guesser_chat_id']
         await context.bot.send_message(
             chat_id=guesser_chat_id,
-            text=f"{word_setter_username} загадал(а) слово из 5 букв. Попробуй угадать его!"
+            text=GUESS_PROMPT_MESSAGE.format(word_setter_username=word_setter_username)
         )
         return ConversationHandler.END
     else:
@@ -145,7 +160,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     guesser_username = update.message.from_user.username
     message = update.message.text.strip().lower()
     if len(message) != 5 or not message.isalpha():
-        await update.message.reply_text("Догадка должна состоять из 5 букв.")
+        await update.message.reply_text(INVALID_GUESS_MESSAGE)
         return
 
     # Поиск соответствующей игры
@@ -158,7 +173,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             break
 
     if not game:
-        await update.message.reply_text("У вас нет активных игр. Начните новую с помощью команды /new_game.")
+        await update.message.reply_text(NO_ACTIVE_GAME_MESSAGE)
         return
 
     secret_word = game['secret_word']
@@ -168,7 +183,9 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     attempt_number = len(game['attempts'])
 
     # Формируем сообщение с последней попыткой и номером
-    attempt_text = f"Попытка {attempt_number}:\n{result}\n{feedback}"
+    attempt_text = ATTEMPT_MESSAGE.format(
+        attempt_number=attempt_number, result=result, feedback=feedback
+    )
 
     await update.message.reply_text(attempt_text)
 
@@ -176,38 +193,44 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     word_setter_chat_id = game['word_setter_chat_id']
     await context.bot.send_message(
         chat_id=word_setter_chat_id,
-        text=f"Игрок {guesser_username} сделал попытку {attempt_number}:\n{result}\n{feedback}"
+        text=ATTEMPT_MESSAGE.format(
+            attempt_number=attempt_number, result=result, feedback=feedback
+        )
     )
 
     if message == secret_word:
-        await update.message.reply_text("🎉 Поздравляем! Вы угадали слово! 🎉")
+        await update.message.reply_text(GUESSER_WIN_MESSAGE)
 
         # Отправляем сообщение загадывающему
         await context.bot.send_message(
             chat_id=word_setter_chat_id,
-            text=f"Игрок {guesser_username} угадал ваше слово!"
+            text=WORD_SETTER_WIN_MESSAGE.format(guesser_username=guesser_username)
         )
 
         # Удаляем игру
         del games[(word_setter_username, guesser_username)]
     else:
         if attempt_number >= 6:
-            await update.message.reply_text(f"К сожалению, попытки закончились. Вы не смогли угадать слово '{secret_word.upper()}'.")
+            await update.message.reply_text(
+                OUT_OF_ATTEMPTS_MESSAGE.format(secret_word=secret_word.upper())
+            )
             # Информируем загадавшего игрока
             await context.bot.send_message(
                 chat_id=word_setter_chat_id,
-                text=f"Игрок {guesser_username} не смог угадать ваше слово за 6 попыток."
+                text=WORD_SETTER_LOSS_MESSAGE.format(guesser_username=guesser_username)
             )
             # Удаляем игру
             del games[(word_setter_username, guesser_username)]
         else:
             remaining_attempts = 6 - attempt_number
-            await update.message.reply_text(f"Попробуйте еще раз. Осталось попыток: {remaining_attempts}")
+            await update.message.reply_text(
+                TRY_AGAIN_MESSAGE.format(remaining_attempts=remaining_attempts)
+            )
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отмена игры"""
-    await update.message.reply_text("Игра прервана.")
+    await update.message.reply_text(CANCEL_MESSAGE)
     return ConversationHandler.END
 
 
