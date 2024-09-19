@@ -1,5 +1,6 @@
 # main.py
 
+import json
 import logging
 import asyncio
 import nest_asyncio
@@ -54,6 +55,21 @@ games = {}
 user_chat_ids = {}
 
 
+def load_user_chat_ids():
+    """Load user chat IDs from a file."""
+    try:
+        with open('user_chat_ids.json', 'r') as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def save_user_chat_ids():
+    """Save user chat IDs to a file."""
+    with open('user_chat_ids.json', 'w') as file:
+        json.dump(user_chat_ids, file)
+
+user_chat_ids = load_user_chat_ids()
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /start"""
     user = update.message.from_user
@@ -65,7 +81,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             START_MESSAGE
         )
-    else:
+        save_user_chat_ids()
         await update.message.reply_text(
             NO_USERNAME_MESSAGE
         )
@@ -140,8 +156,7 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=guesser_chat_id,
             text=GUESS_PROMPT_MESSAGE.format(word_setter_username=word_setter_username)
         )
-        return ConversationHandler.END
-    else:
+        save_user_chat_ids()
         await update.message.reply_text(ERROR_MESSAGE)
         return ConversationHandler.END
 
@@ -269,4 +284,7 @@ async def main():
 
 if __name__ == '__main__':
     nest_asyncio.apply()
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    finally:
+        save_user_chat_ids()
