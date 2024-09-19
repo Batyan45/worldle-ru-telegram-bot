@@ -1,6 +1,8 @@
 # main.py
 
 import logging
+import asyncio
+import nest_asyncio
 from telegram import Update
 from config import TELEGRAM_BOT_TOKEN
 from strings import (
@@ -22,6 +24,10 @@ from strings import (
     WORD_SETTER_LOSS_MESSAGE,
     TRY_AGAIN_MESSAGE,
     CANCEL_MESSAGE,
+    ERROR_MESSAGE,
+    START_COMMAND_DESCRIPTION,
+    NEW_GAME_COMMAND_DESCRIPTION,
+    CANCEL_COMMAND_DESCRIPTION,
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -136,7 +142,7 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ConversationHandler.END
     else:
-        await update.message.reply_text("Произошла ошибка. Попробуйте начать новую игру.")
+        await update.message.reply_text(ERROR_MESSAGE)
         return ConversationHandler.END
 
 
@@ -233,8 +239,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(CANCEL_MESSAGE)
     return ConversationHandler.END
 
-
-def main():
+async def main():
     """Основная функция запуска бота"""
     application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
@@ -252,8 +257,16 @@ def main():
     # Обработчик догадок
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, guess_word))
 
-    application.run_polling()
+    # Set bot commands for the command hints
+    await application.bot.set_my_commands([
+        ("start", START_COMMAND_DESCRIPTION),
+        ("new_game", NEW_GAME_COMMAND_DESCRIPTION),
+        ("cancel", CANCEL_COMMAND_DESCRIPTION)
+    ])
+
+    await application.run_polling()
 
 
 if __name__ == '__main__':
-    main()
+    nest_asyncio.apply()
+    asyncio.run(main())

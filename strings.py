@@ -30,3 +30,7 @@ WORD_SETTER_LOSS_MESSAGE = (
 )
 TRY_AGAIN_MESSAGE = "Попробуйте еще раз. Осталось попыток: {remaining_attempts}"
 CANCEL_MESSAGE = "Игра прервана."
+ERROR_MESSAGE = "Произошла ошибка. Попробуйте начать новую игру."
+START_COMMAND_DESCRIPTION = "Начать взаимодействие с ботом"
+NEW_GAME_COMMAND_DESCRIPTION = "Создать новую игру"
+CANCEL_COMMAND_DESCRIPTION = "Отменить текущую игру"
