@@ -172,7 +172,6 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=GUESS_PROMPT_MESSAGE.format(word_setter_username=word_setter_username)
         )
         save_user_chat_ids()
-        await update.message.reply_text(ERROR_MESSAGE)
         return ConversationHandler.END
 
 
