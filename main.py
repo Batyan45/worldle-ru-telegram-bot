@@ -12,6 +12,8 @@ from strings import (
     NEW_GAME_MESSAGE,
     NO_USERNAME_NEW_GAME_MESSAGE,
     SECOND_PLAYER_NOT_STARTED_MESSAGE,
+    SECOND_PLAYER_WAITING_MESSAGE,
+    SECOND_PLAYER_HAS_ACTIVE_GAME_MESSAGE,
     WORD_PROMPT_MESSAGE,
     INVALID_WORD_MESSAGE,
     WORD_SET_MESSAGE,
@@ -76,11 +78,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = user.username
     chat_id = update.message.chat_id
     # Сохраняем chat_id пользователя
-    if username:
+    word_setter_username = username
+    second_player_username = context.user_data.get('guesser_username', None)
+    if username and second_player_username:
         user_chat_ids[username] = chat_id
         await update.message.reply_text(
             START_MESSAGE
         )
+        if (second_player_username, word_setter_username) in games:
+            await update.message.reply_text(
+                SECOND_PLAYER_HAS_ACTIVE_GAME_MESSAGE.format(second_player=second_player_username)
+            )
+            return WAITING_FOR_SECOND_PLAYER
         save_user_chat_ids()
         await update.message.reply_text(
             NO_USERNAME_MESSAGE
@@ -106,7 +115,8 @@ async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
         second_player = '@' + second_player  # Добавляем '@' в начало
     second_player_username = second_player[1:]  # Убираем '@'
 
-    if second_player_username not in user_chat_ids:
+    word_setter_username = update.message.from_user.username
+    if second_player_username not in user_chat_ids or (second_player_username, word_setter_username) in games:
         await update.message.reply_text(
             SECOND_PLAYER_NOT_STARTED_MESSAGE.format(second_player=second_player)
         )
@@ -130,6 +140,11 @@ async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         WORD_PROMPT_MESSAGE.format(word_setter_username=word_setter_username)
+    )
+    # Notify the second player that the first player is setting a word
+    await context.bot.send_message(
+        chat_id=guesser_chat_id,
+        text=SECOND_PLAYER_WAITING_MESSAGE.format(word_setter_username=word_setter_username)
     )
     return WAITING_FOR_WORD
 
