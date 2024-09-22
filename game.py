@@ -21,6 +21,10 @@ games = {}
 
 def get_feedback(secret_word, guess):
     """Функция для предоставления обратной связи по догадке"""
+    # Normalize 'Ё' to 'Е' in both secret word and guess
+    secret_word = secret_word.replace('ё', 'е')
+    guess = guess.replace('ё', 'е')
+    
     feedback = ""
     result = ""
     for s_char, g_char in zip(secret_word, guess):
