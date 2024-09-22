@@ -1,6 +1,5 @@
 # main.py
 
-import json
 import logging
 import asyncio
 import nest_asyncio
@@ -40,6 +39,17 @@ from telegram.ext import (
     filters,
     ConversationHandler,
 )
+from game import (
+    create_game,
+    get_game,
+    delete_game,
+    get_feedback,
+    games
+)
+from user import (
+    user_chat_ids,
+    save_user_chat_ids
+)
 
 # Настройка логирования
 logging.basicConfig(
@@ -49,28 +59,6 @@ logging.basicConfig(
 
 # Этапы разговора
 WAITING_FOR_SECOND_PLAYER, WAITING_FOR_WORD = range(2)
-
-# Словарь для хранения состояния игр
-games = {}
-
-# Словарь для хранения chat_id пользователей по username
-user_chat_ids = {}
-
-
-def load_user_chat_ids():
-    """Load user chat IDs from a file."""
-    try:
-        with open('user_chat_ids.json', 'r') as file:
-            return json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
-
-def save_user_chat_ids():
-    """Save user chat IDs to a file."""
-    with open('user_chat_ids.json', 'w') as file:
-        json.dump(user_chat_ids, file)
-
-user_chat_ids = load_user_chat_ids()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /start"""
@@ -116,7 +104,7 @@ async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
     second_player_username = second_player[1:]  # Убираем '@'
 
     word_setter_username = update.message.from_user.username
-    if second_player_username not in user_chat_ids or (second_player_username, word_setter_username) in games:
+    if second_player_username not in user_chat_ids or get_game(word_setter_username, second_player_username):
         await update.message.reply_text(
             SECOND_PLAYER_NOT_STARTED_MESSAGE.format(second_player=second_player)
         )
@@ -130,13 +118,7 @@ async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
     guesser_chat_id = user_chat_ids[second_player_username]
 
     # Создаём новую игру
-    games[(word_setter_username, second_player_username)] = {
-        'state': 'waiting_for_word',
-        'secret_word': '',
-        'attempts': [],
-        'word_setter_chat_id': word_setter_chat_id,
-        'guesser_chat_id': guesser_chat_id
-    }
+    create_game(word_setter_username, second_player_username, word_setter_chat_id, guesser_chat_id)
 
     await update.message.reply_text(
         WORD_PROMPT_MESSAGE.format(word_setter_username=word_setter_username)
@@ -158,7 +140,7 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     word_setter_username = context.user_data['word_setter_username']
     guesser_username = context.user_data['guesser_username']
-    game = games.get((word_setter_username, guesser_username))
+    game = get_game(word_setter_username, guesser_username)
 
     if game and game['state'] == 'waiting_for_word':
         game['secret_word'] = word
@@ -174,22 +156,6 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_user_chat_ids()
         return ConversationHandler.END
 
-
-def get_feedback(secret_word, guess):
-    """Функция для предоставления обратной связи по догадке"""
-    feedback = ""
-    result = ""
-    for s_char, g_char in zip(secret_word, guess):
-        if g_char == s_char:
-            feedback += f"🟩"
-        elif g_char in secret_word:
-            feedback += f"🟨"
-        else:
-            feedback += f"⬜"
-        result += g_char.upper()
-    return result, feedback
-
-
 async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка догадок игрока"""
     guesser_username = update.message.from_user.username
@@ -199,13 +165,14 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Поиск соответствующей игры
-    game = None
-    word_setter_username = None
-    for (w_s_username, g_username), g in games.items():
-        if g_username == guesser_username and g['state'] == 'waiting_for_guess':
-            game = g
-            word_setter_username = w_s_username
-            break
+    game = next(
+        (g for (w_s_username, g_username), g in games.items() if g_username == guesser_username and g['state'] == 'waiting_for_guess'),
+        None
+    )
+    word_setter_username = next(
+        (w_s_username for (w_s_username, g_username), g in games.items() if g_username == guesser_username and g['state'] == 'waiting_for_guess'),
+        None
+    )
 
     if not game:
         await update.message.reply_text(NO_ACTIVE_GAME_MESSAGE)
@@ -243,7 +210,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         # Удаляем игру
-        del games[(word_setter_username, guesser_username)]
+        delete_game(word_setter_username, guesser_username)
     else:
         if attempt_number >= 6:
             await update.message.reply_text(
