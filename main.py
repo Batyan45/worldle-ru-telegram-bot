@@ -71,16 +71,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if username and second_player_username:
         user_chat_ids[username] = chat_id
         await update.message.reply_text(
-            START_MESSAGE
+            START_MESSAGE,
+            parse_mode='Markdown'
         )
         if (second_player_username, word_setter_username) in games:
             await update.message.reply_text(
-                SECOND_PLAYER_HAS_ACTIVE_GAME_MESSAGE.format(second_player=second_player_username)
+                SECOND_PLAYER_HAS_ACTIVE_GAME_MESSAGE.format(second_player=second_player_username),
+                parse_mode='Markdown'
             )
             return WAITING_FOR_SECOND_PLAYER
         save_user_chat_ids()
         await update.message.reply_text(
-            NO_USERNAME_MESSAGE
+            NO_USERNAME_MESSAGE,
+            parse_mode='Markdown'
         )
 
 
@@ -89,10 +92,10 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     username = user.username
     if not username:
-        await update.message.reply_text(NO_USERNAME_NEW_GAME_MESSAGE)
+        await update.message.reply_text(NO_USERNAME_NEW_GAME_MESSAGE, parse_mode='Markdown')
         return ConversationHandler.END
 
-    await update.message.reply_text(NEW_GAME_MESSAGE)
+    await update.message.reply_text(NEW_GAME_MESSAGE, parse_mode='Markdown')
     return WAITING_FOR_SECOND_PLAYER
 
 
@@ -106,7 +109,8 @@ async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
     word_setter_username = update.message.from_user.username
     if second_player_username not in user_chat_ids or get_game(word_setter_username, second_player_username):
         await update.message.reply_text(
-            SECOND_PLAYER_NOT_STARTED_MESSAGE.format(second_player=second_player)
+            SECOND_PLAYER_NOT_STARTED_MESSAGE.format(second_player=second_player),
+            parse_mode='Markdown'
         )
         return WAITING_FOR_SECOND_PLAYER
 
@@ -121,12 +125,14 @@ async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
     create_game(word_setter_username, second_player_username, word_setter_chat_id, guesser_chat_id)
 
     await update.message.reply_text(
-        WORD_PROMPT_MESSAGE.format(word_setter_username=word_setter_username)
+        WORD_PROMPT_MESSAGE.format(word_setter_username=word_setter_username),
+        parse_mode='Markdown'
     )
     # Notify the second player that the first player is setting a word
     await context.bot.send_message(
         chat_id=guesser_chat_id,
-        text=SECOND_PLAYER_WAITING_MESSAGE.format(word_setter_username=word_setter_username)
+        text=SECOND_PLAYER_WAITING_MESSAGE.format(word_setter_username=word_setter_username),
+        parse_mode='Markdown'
     )
     return WAITING_FOR_WORD
 
@@ -135,7 +141,7 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Получение загаданного слова и начало игры"""
     word = update.message.text.strip().lower()
     if len(word) != 5 or not word.isalpha():
-        await update.message.reply_text(INVALID_WORD_MESSAGE)
+        await update.message.reply_text(INVALID_WORD_MESSAGE, parse_mode='Markdown')
         return WAITING_FOR_WORD
 
     word_setter_username = context.user_data['word_setter_username']
@@ -145,13 +151,14 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if game and game['state'] == 'waiting_for_word':
         game['secret_word'] = word
         game['state'] = 'waiting_for_guess'
-        await update.message.reply_text(WORD_SET_MESSAGE)
+        await update.message.reply_text(WORD_SET_MESSAGE, parse_mode='Markdown')
 
         # Отправляем сообщение угадывающему
         guesser_chat_id = game['guesser_chat_id']
         await context.bot.send_message(
             chat_id=guesser_chat_id,
-            text=GUESS_PROMPT_MESSAGE.format(word_setter_username=word_setter_username)
+            text=GUESS_PROMPT_MESSAGE.format(word_setter_username=word_setter_username),
+            parse_mode='Markdown'
         )
         save_user_chat_ids()
         return ConversationHandler.END
@@ -161,7 +168,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     guesser_username = update.message.from_user.username
     message = update.message.text.strip().lower()
     if len(message) != 5 or not message.isalpha():
-        await update.message.reply_text(INVALID_GUESS_MESSAGE)
+        await update.message.reply_text(INVALID_GUESS_MESSAGE, parse_mode='Markdown')
         return
 
     # Поиск соответствующей игры
@@ -175,21 +182,63 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if not game:
-        await update.message.reply_text(NO_ACTIVE_GAME_MESSAGE)
+        await update.message.reply_text(NO_ACTIVE_GAME_MESSAGE, parse_mode='Markdown')
         return
 
     secret_word = game['secret_word']
-    result, feedback = get_feedback(secret_word, message)
+    result, feedback, correct_letters, used_letters = get_feedback(secret_word, message)
     game['attempts'].append((result, feedback))
+
+    # Обновляем списки использованных и правильных букв
+    if 'correct_letters' not in game:
+        game['correct_letters'] = set()
+    if 'used_letters' not in game:
+        game['used_letters'] = set()
+    game['correct_letters'].update(correct_letters)
+    game['used_letters'].update(used_letters)
 
     attempt_number = len(game['attempts'])
 
-    # Формируем сообщение с последней попыткой и номером
-    attempt_text = ATTEMPT_MESSAGE.format(
+    # Формируем сообщение с последней попыткой и номером для загадавшего
+    attempt_text_setter = ATTEMPT_MESSAGE.format(
         attempt_number=attempt_number, result=result, feedback=feedback
     )
 
-    await update.message.reply_text(attempt_text)
+    await update.message.reply_text(attempt_text_setter, parse_mode='Markdown')
+
+    # Формируем сообщение для угадывающего с двумя столбцами
+    attempts_text = "\n".join(
+        f"`{attempt[0]}` | `{attempt[1]}`" for attempt in game['attempts']
+    )
+
+    # Формируем алфавит
+    alphabet = list("АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ")
+    alphabet_display = " ".join(
+        f"**{letter}**" if letter in game['correct_letters'] else letter
+        for letter in sorted(alphabet)
+    )
+    used_letters_display = " ".join(
+        letter for letter in sorted(game['used_letters'])
+    )
+
+    # Удаляем предыдущее сообщение с попытками и алфавитом, если оно существует
+    if 'last_attempt_message' in context.user_data:
+        try:
+            await context.bot.delete_message(
+                chat_id=update.message.chat_id,
+                message_id=context.user_data['last_attempt_message']
+            )
+        except Exception as e:
+            logging.warning(f"Failed to delete message: {e}")
+
+    # Отправляем новое сообщение угадывающему
+    sent_message = await update.message.reply_text(
+        f"{attempts_text}\n\n🟩🟨: {alphabet_display}\n\n⬜: {used_letters_display}",
+        parse_mode='Markdown'
+    )
+
+    # Сохраняем ID последнего сообщения с попытками и алфавитом
+    context.user_data['last_attempt_message'] = sent_message.message_id
 
     # Отправляем попытку загадавшему игроку с припиской
     word_setter_chat_id = game['word_setter_chat_id']
@@ -197,16 +246,18 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=word_setter_chat_id,
         text=ATTEMPT_MESSAGE.format(
             attempt_number=attempt_number, result=result, feedback=feedback
-        )
+        ),
+        parse_mode='Markdown'
     )
 
     if message == secret_word:
-        await update.message.reply_text(GUESSER_WIN_MESSAGE)
+        await update.message.reply_text(GUESSER_WIN_MESSAGE, parse_mode='Markdown')
 
         # Отправляем сообщение загадывающему
         await context.bot.send_message(
             chat_id=word_setter_chat_id,
-            text=WORD_SETTER_WIN_MESSAGE.format(guesser_username=guesser_username)
+            text=WORD_SETTER_WIN_MESSAGE.format(guesser_username=guesser_username),
+            parse_mode='Markdown'
         )
 
         # Удаляем игру
@@ -214,25 +265,28 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         if attempt_number >= 6:
             await update.message.reply_text(
-                OUT_OF_ATTEMPTS_MESSAGE.format(secret_word=secret_word.upper())
+                OUT_OF_ATTEMPTS_MESSAGE.format(secret_word=secret_word.upper()),
+                parse_mode='Markdown'
             )
             # Информируем загадавшего игрока
             await context.bot.send_message(
                 chat_id=word_setter_chat_id,
-                text=WORD_SETTER_LOSS_MESSAGE.format(guesser_username=guesser_username)
+                text=WORD_SETTER_LOSS_MESSAGE.format(guesser_username=guesser_username),
+                parse_mode='Markdown'
             )
             # Удаляем игру
             del games[(word_setter_username, guesser_username)]
         else:
             remaining_attempts = 6 - attempt_number
             await update.message.reply_text(
-                TRY_AGAIN_MESSAGE.format(remaining_attempts=remaining_attempts)
+                TRY_AGAIN_MESSAGE.format(remaining_attempts=remaining_attempts),
+                parse_mode='Markdown'
             )
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отмена игры"""
-    await update.message.reply_text(CANCEL_MESSAGE)
+    await update.message.reply_text(CANCEL_MESSAGE, parse_mode='Markdown')
     return ConversationHandler.END
 
 async def main():

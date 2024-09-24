@@ -27,15 +27,21 @@ def get_feedback(secret_word, guess):
     
     feedback = ""
     result = ""
+    correct_letters = set()
+    used_letters = set()
     for s_char, g_char in zip(secret_word, guess):
+        g_char_upper = g_char.upper()
         if g_char == s_char:
             feedback += f"🟩"
+            correct_letters.add(g_char_upper)
         elif g_char in secret_word:
             feedback += f"🟨"
+            correct_letters.add(g_char_upper)
         else:
             feedback += f"⬜"
-        result += g_char.upper()
-    return result, feedback
+            used_letters.add(g_char_upper)
+        result += g_char_upper
+    return result, feedback, correct_letters, used_letters
 
 def create_game(word_setter_username, second_player_username, word_setter_chat_id, guesser_chat_id):
     """Создание новой игры"""
