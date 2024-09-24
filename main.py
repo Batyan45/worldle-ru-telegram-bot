@@ -3,7 +3,7 @@
 import logging
 import asyncio
 import nest_asyncio
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from config import TELEGRAM_BOT_TOKEN
 from strings import (
     START_MESSAGE,
@@ -38,6 +38,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
     ConversationHandler,
+    CallbackQueryHandler,
 )
 from game import (
     create_game,
@@ -47,8 +48,8 @@ from game import (
     games
 )
 from user import (
-    user_chat_ids,
-    save_user_chat_ids
+    user_data,
+    save_user_data
 )
 
 # Настройка логирования
@@ -60,6 +61,8 @@ logging.basicConfig(
 # Этапы разговора
 WAITING_FOR_SECOND_PLAYER, WAITING_FOR_WORD = range(2)
 
+# Обработчик нажатий на кнопки
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /start"""
     user = update.message.from_user
@@ -67,24 +70,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     # Сохраняем chat_id пользователя
     word_setter_username = username
-    second_player_username = context.user_data.get('guesser_username', None)
-    if username and second_player_username:
-        user_chat_ids[username] = chat_id
+    if username:
+        if username not in user_data:
+            user_data[username] = {}
+        user_data[username]['chat_id'] = chat_id
         await update.message.reply_text(
             START_MESSAGE,
             parse_mode='Markdown'
         )
-        if (second_player_username, word_setter_username) in games:
-            await update.message.reply_text(
-                SECOND_PLAYER_HAS_ACTIVE_GAME_MESSAGE.format(second_player=second_player_username),
-                parse_mode='Markdown'
-            )
-            return WAITING_FOR_SECOND_PLAYER
-        save_user_chat_ids()
-        await update.message.reply_text(
-            NO_USERNAME_MESSAGE,
-            parse_mode='Markdown'
-        )
+        save_user_data()
 
 
 async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -95,7 +89,13 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(NO_USERNAME_NEW_GAME_MESSAGE, parse_mode='Markdown')
         return ConversationHandler.END
 
-    await update.message.reply_text(NEW_GAME_MESSAGE, parse_mode='Markdown')
+    last_partner = user_data.get(username, {}).get('last_partner')
+    if last_partner:
+        keyboard = [[InlineKeyboardButton(f"Играть с @{last_partner}", callback_data=f"last_partner_{last_partner}")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(NEW_GAME_MESSAGE, parse_mode='Markdown', reply_markup=reply_markup)
+    else:
+        await update.message.reply_text(NEW_GAME_MESSAGE, parse_mode='Markdown')
     return WAITING_FOR_SECOND_PLAYER
 
 
@@ -107,7 +107,7 @@ async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
     second_player_username = second_player[1:]  # Убираем '@'
 
     word_setter_username = update.message.from_user.username
-    if second_player_username not in user_chat_ids or get_game(word_setter_username, second_player_username):
+    if second_player_username not in user_data or get_game(word_setter_username, second_player_username):
         await update.message.reply_text(
             SECOND_PLAYER_NOT_STARTED_MESSAGE.format(second_player=second_player),
             parse_mode='Markdown'
@@ -119,7 +119,12 @@ async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['word_setter_username'] = word_setter_username
     context.user_data['guesser_username'] = second_player_username
 
-    guesser_chat_id = user_chat_ids[second_player_username]
+    # Сохраняем последнего партнёра для каждого пользователя
+    user_data[word_setter_username]['last_partner'] = second_player_username
+    user_data[second_player_username]['last_partner'] = word_setter_username
+    save_user_data()
+
+    guesser_chat_id = user_data[second_player_username]['chat_id']
 
     # Создаём новую игру
     create_game(word_setter_username, second_player_username, word_setter_chat_id, guesser_chat_id)
@@ -160,8 +165,13 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=GUESS_PROMPT_MESSAGE.format(word_setter_username=word_setter_username),
             parse_mode='Markdown'
         )
-        save_user_chat_ids()
+        save_user_data()
         return ConversationHandler.END
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отмена текущего разговора."""
+    await update.message.reply_text(CANCEL_MESSAGE, parse_mode='Markdown')
+    return ConversationHandler.END
 
 async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка догадок игрока"""
@@ -262,6 +272,11 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Удаляем игру
         delete_game(word_setter_username, guesser_username)
+
+        # Обновляем последнего партнёра
+        user_data[word_setter_username]['last_partner'] = guesser_username
+        user_data[guesser_username]['last_partner'] = word_setter_username
+        save_user_data()
     else:
         if attempt_number >= 6:
             await update.message.reply_text(
@@ -284,10 +299,37 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отмена игры"""
-    await update.message.reply_text(CANCEL_MESSAGE, parse_mode='Markdown')
-    return ConversationHandler.END
+async def handle_last_partner(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка нажатия на кнопку с последним партнёром"""
+    query = update.callback_query
+    await query.answer()
+    last_partner_username = query.data.replace('last_partner_', '')
+    word_setter_username = update.effective_user.username
+    context.user_data['word_setter_username'] = word_setter_username
+    context.user_data['guesser_username'] = last_partner_username
+
+    # Создаём новую игру
+    word_setter_chat_id = user_data[word_setter_username]['chat_id']
+    guesser_chat_id = user_data[last_partner_username]['chat_id']
+    create_game(word_setter_username, last_partner_username, word_setter_chat_id, guesser_chat_id)
+
+    # Сохраняем последнего партнёра
+    user_data[word_setter_username]['last_partner'] = last_partner_username
+    save_user_data()
+
+    await query.edit_message_text(
+        text=WORD_PROMPT_MESSAGE.format(word_setter_username=word_setter_username),
+        parse_mode='Markdown'
+    )
+
+    # Уведомляем второго игрока, что первый игрок загадывает слово
+    await context.bot.send_message(
+        chat_id=guesser_chat_id,
+        text=SECOND_PLAYER_WAITING_MESSAGE.format(word_setter_username=word_setter_username),
+        parse_mode='Markdown'
+    )
+
+    return WAITING_FOR_WORD
 
 async def main():
     """Основная функция запуска бота"""
@@ -296,7 +338,10 @@ async def main():
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('new_game', new_game)],
         states={
-            WAITING_FOR_SECOND_PLAYER: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_player)],
+            WAITING_FOR_SECOND_PLAYER: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, set_player),
+                CallbackQueryHandler(handle_last_partner, pattern='^last_partner_')
+            ],
             WAITING_FOR_WORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_word)],
         },
         fallbacks=[CommandHandler('cancel', cancel)],
@@ -306,6 +351,7 @@ async def main():
     application.add_handler(conv_handler)
     # Обработчик догадок
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, guess_word))
+
 
     # Set bot commands for the command hints
     await application.bot.set_my_commands([
@@ -322,4 +368,4 @@ if __name__ == '__main__':
     try:
         asyncio.run(main())
     finally:
-        save_user_chat_ids()
+        save_user_data()
