@@ -199,13 +199,13 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result, feedback, correct_letters, used_letters = get_feedback(secret_word, message)
     game['attempts'].append((result, feedback))
 
-    # Обновляем списки использованных и правильных букв
+    # Обновляем списки использованных и правильных букв без повторений
     if 'correct_letters' not in game:
         game['correct_letters'] = set()
     if 'used_letters' not in game:
         game['used_letters'] = set()
-    game['correct_letters'].update(correct_letters)
-    game['used_letters'].update(used_letters)
+    game['correct_letters'].update(correct_letters - game['used_letters'])
+    game['used_letters'].update(used_letters - game['correct_letters'])
 
     attempt_number = len(game['attempts'])
 
@@ -222,14 +222,11 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     # Формируем алфавит
-    alphabet = list("АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ")
-    alphabet_display = " ".join(
-        f"**{letter}**" if letter in game['correct_letters'] else letter
-        for letter in sorted(alphabet)
-    )
-    used_letters_display = " ".join(
-        letter for letter in sorted(game['used_letters'])
-    )
+    alphabet = set("АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ")
+    correct_letters_display = " ".join(sorted(game['correct_letters']))
+    used_letters_display = " ".join(sorted(game['used_letters']))
+    remaining_letters = alphabet - game['correct_letters'] - game['used_letters']
+    remaining_letters_display = " ".join(sorted(remaining_letters))
 
     # Удаляем предыдущее сообщение с попытками и алфавитом, если оно существует
     if 'last_attempt_message' in context.user_data:
@@ -243,7 +240,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Отправляем новое сообщение угадывающему
     sent_message = await update.message.reply_text(
-        f"{attempts_text}\n\n🟩🟨: {alphabet_display}\n\n⬜: {used_letters_display}",
+        f"{attempts_text}\n\n{remaining_letters_display}\n\n🟩🟨: {correct_letters_display}\n\n⬜: {used_letters_display}",
         parse_mode='Markdown'
     )
 
