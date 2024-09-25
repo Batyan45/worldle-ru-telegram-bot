@@ -22,7 +22,7 @@ SECOND_PLAYER_HAS_ACTIVE_GAME_MESSAGE = (
 WORD_PROMPT_MESSAGE = "Отлично! Теперь, {word_setter_username}, загадай слово из 5 букв."
 INVALID_WORD_MESSAGE = "Слово должно состоять из 5 букв. Попробуй снова."
 WORD_SET_MESSAGE = "Слово загадано!"
-GUESS_PROMPT_MESSAGE = "{word_setter_username} загадал(а) слово из 5 букв. Попробуй угадать его!"
+GUESS_PROMPT_MESSAGE = "{word_setter_username} загадал(а) слово из 5 букв на {language}. Попробуй угадать его!"
 NO_ACTIVE_GAME_MESSAGE = "У вас нет активных игр. Начните новую с помощью команды /new_game."
 INVALID_GUESS_MESSAGE = "Догадка должна состоять из 5 букв."
 ATTEMPT_MESSAGE = "Попытка {attempt_number}:\n{result}\n{feedback}"
@@ -36,7 +36,17 @@ WORD_SETTER_LOSS_MESSAGE = (
 )
 TRY_AGAIN_MESSAGE = "Попробуйте еще раз. Осталось попыток: {remaining_attempts}"
 CANCEL_MESSAGE = "Игра прервана."
+MIXED_LANGUAGE_MESSAGE = "Слово должно содержать только русские или только английские буквы. Попробуйте снова."
+INVALID_GUESS_LANGUAGE_MESSAGE = "Пожалуйста, используйте буквы из того же алфавита, что и загаданное слово."
 ERROR_MESSAGE = "Произошла ошибка. Попробуйте начать новую игру."
 START_COMMAND_DESCRIPTION = "Начать взаимодействие с ботом"
 NEW_GAME_COMMAND_DESCRIPTION = "Создать новую игру"
 CANCEL_COMMAND_DESCRIPTION = "Отменить текущую игру"
+
+LANGUAGE_STRINGS = {
+    'russian': 'русском языке',
+    'english': 'английском языке'
+}
+
+RUSSIAN_ALPHABET = set("АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ")
+ENGLISH_ALPHABET = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ")

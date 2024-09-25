@@ -26,10 +26,15 @@ from strings import (
     WORD_SETTER_LOSS_MESSAGE,
     TRY_AGAIN_MESSAGE,
     CANCEL_MESSAGE,
+    MIXED_LANGUAGE_MESSAGE,
+    INVALID_GUESS_LANGUAGE_MESSAGE,
     ERROR_MESSAGE,
     START_COMMAND_DESCRIPTION,
     NEW_GAME_COMMAND_DESCRIPTION,
     CANCEL_COMMAND_DESCRIPTION,
+    LANGUAGE_STRINGS,
+    RUSSIAN_ALPHABET,
+    ENGLISH_ALPHABET,
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -153,6 +158,17 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     guesser_username = context.user_data['guesser_username']
     game = get_game(word_setter_username, guesser_username)
 
+    # Определяем язык
+    if all('а' <= c <= 'я' or c == 'ё' for c in word):
+        game['language'] = 'russian'
+    elif all('a' <= c <= 'z' for c in word):
+        game['language'] = 'english'
+    else:
+        await update.message.reply_text(MIXED_LANGUAGE_MESSAGE, parse_mode='Markdown')
+        return WAITING_FOR_WORD
+
+    language_str = LANGUAGE_STRINGS[game['language']]
+
     if game and game['state'] == 'waiting_for_word':
         game['secret_word'] = word
         game['state'] = 'waiting_for_guess'
@@ -160,9 +176,10 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Отправляем сообщение угадывающему
         guesser_chat_id = game['guesser_chat_id']
+        language_str = LANGUAGE_STRINGS[game['language']]
         await context.bot.send_message(
             chat_id=guesser_chat_id,
-            text=GUESS_PROMPT_MESSAGE.format(word_setter_username=word_setter_username),
+            text=GUESS_PROMPT_MESSAGE.format(word_setter_username=word_setter_username, language=language_str),
             parse_mode='Markdown'
         )
         save_user_data()
@@ -177,9 +194,6 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка догадок игрока"""
     guesser_username = update.message.from_user.username
     message = update.message.text.strip().lower()
-    if len(message) != 5 or not message.isalpha():
-        await update.message.reply_text(INVALID_GUESS_MESSAGE, parse_mode='Markdown')
-        return
 
     # Поиск соответствующей игры
     game = next(
@@ -194,6 +208,21 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not game:
         await update.message.reply_text(NO_ACTIVE_GAME_MESSAGE, parse_mode='Markdown')
         return
+
+    if len(message) != 5 or not message.isalpha():
+        await update.message.reply_text(INVALID_GUESS_MESSAGE, parse_mode='Markdown')
+        return
+
+    # Проверяем язык догадки
+    language = game.get('language', 'russian')
+    if language == 'russian':
+        if not all('а' <= c <= 'я' or c == 'ё' for c in message):
+            await update.message.reply_text(INVALID_GUESS_LANGUAGE_MESSAGE, parse_mode='Markdown')
+            return
+    elif language == 'english':
+        if not all('a' <= c <= 'z' for c in message):
+            await update.message.reply_text(INVALID_GUESS_LANGUAGE_MESSAGE, parse_mode='Markdown')
+            return
 
     secret_word = game['secret_word']
     result, feedback, correct_letters, used_letters = get_feedback(secret_word, message)
@@ -222,7 +251,10 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     # Формируем алфавит
-    alphabet = set("АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ")
+    if language == 'russian':
+        alphabet = RUSSIAN_ALPHABET
+    else:
+        alphabet = ENGLISH_ALPHABET
     correct_letters_display = " ".join(sorted(game['correct_letters']))
     used_letters_display = " ".join(sorted(game['used_letters']))
     remaining_letters = alphabet - game['correct_letters'] - game['used_letters']
