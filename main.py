@@ -35,6 +35,9 @@ from strings import (
     LANGUAGE_STRINGS,
     RUSSIAN_ALPHABET,
     ENGLISH_ALPHABET,
+    SAY_COMMAND_DESCRIPTION,
+    NO_ACTIVE_GAME_MESSAGE_SAY,
+    MESSAGE_RECEIVED,
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -145,6 +148,51 @@ async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
     return WAITING_FOR_WORD
+
+async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отправка сообщения другому игроку"""
+    sender_username = update.message.from_user.username
+    message_text = ' '.join(context.args)
+
+    if not message_text:
+        await update.message.reply_text("Пожалуйста, введите сообщение после команды /say.", parse_mode='Markdown')
+        return
+
+    # Поиск соответствующей игры
+    game = next(
+        (g for (w_s_username, g_username), g in games.items()
+         if (w_s_username == sender_username or g_username == sender_username)
+         and g['state'] == 'waiting_for_guess'),
+        None
+    )
+
+    if not game:
+        await update.message.reply_text(NO_ACTIVE_GAME_MESSAGE_SAY, parse_mode='Markdown')
+        return
+
+    if sender_username == game['word_setter_username']:
+        receiver_username = game['guesser_username']
+    else:
+        receiver_username = game['word_setter_username']
+    receiver_chat_id = user_data.get(receiver_username, {}).get('chat_id')
+
+    if not receiver_chat_id:
+        await update.message.reply_text("Не удалось найти чат другого игрока.", parse_mode='Markdown')
+        return
+
+    sender_chat_id = update.message.chat_id
+
+    # Отправляем сообщение обоим игрокам
+    for chat_id in [receiver_chat_id, sender_chat_id]:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=MESSAGE_RECEIVED.format(sender_username=f"_{sender_username}_", message_text=message_text),
+            parse_mode='Markdown'
+        )
+
+    # Удаляем сообщение пользователя с командой /say
+    await update.message.delete()
+
 
 
 async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -378,6 +426,7 @@ async def main():
 
     application.add_handler(CommandHandler('start', start))
     application.add_handler(conv_handler)
+    application.add_handler(CommandHandler('say', say))
     # Обработчик догадок
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, guess_word))
 
@@ -386,7 +435,8 @@ async def main():
     await application.bot.set_my_commands([
         ("start", START_COMMAND_DESCRIPTION),
         ("new_game", NEW_GAME_COMMAND_DESCRIPTION),
-        ("cancel", CANCEL_COMMAND_DESCRIPTION)
+        ("cancel", CANCEL_COMMAND_DESCRIPTION),
+        ("say", SAY_COMMAND_DESCRIPTION)
     ])
 
     await application.run_polling()

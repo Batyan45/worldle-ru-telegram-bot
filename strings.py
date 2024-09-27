@@ -42,11 +42,15 @@ ERROR_MESSAGE = "Произошла ошибка. Попробуйте нача�
 START_COMMAND_DESCRIPTION = "Начать взаимодействие с ботом"
 NEW_GAME_COMMAND_DESCRIPTION = "Создать новую игру"
 CANCEL_COMMAND_DESCRIPTION = "Отменить текущую игру"
+SAY_COMMAND_DESCRIPTION = "Отправить сообщение другому игроку"
 
 LANGUAGE_STRINGS = {
     'russian': 'русском языке',
     'english': 'английском языке'
 }
+
+NO_ACTIVE_GAME_MESSAGE_SAY = "Вы можете использовать команду /say только во время активной игры."
+MESSAGE_RECEIVED = "**{sender_username}**: {message_text}"
 
 RUSSIAN_ALPHABET = set("АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ")
 ENGLISH_ALPHABET = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
