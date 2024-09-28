@@ -3,7 +3,7 @@
 import logging
 import asyncio
 import nest_asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommandScopeChat
 from config import TELEGRAM_BOT_TOKEN
 from strings import (
     START_MESSAGE,
@@ -38,6 +38,7 @@ from strings import (
     SAY_COMMAND_DESCRIPTION,
     NO_ACTIVE_GAME_MESSAGE_SAY,
     MESSAGE_RECEIVED,
+    ADDTRY_COMMAND_DESCRIPTION,
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -195,6 +196,32 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
+async def addtry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /addtry для добавления одной попытки угадывающему игроку."""
+    word_setter_username = update.message.from_user.username
+    # Найдём текущую игру для загадывающего игрока
+    game = next(
+        (g for (w_s_username, g_username), g in games.items()
+         if w_s_username == word_setter_username and g['state'] == 'waiting_for_guess'),
+        None
+    )
+    if not game:
+        await update.message.reply_text("У вас нет активной игры, чтобы добавить попытку.", parse_mode='Markdown')
+        return
+
+    game['max_attempts'] += 1
+    await update.message.reply_text("Вы добавили одну дополнительную попытку угадывающему игроку.", parse_mode='Markdown')
+
+    # Уведомляем угадывающего игрока
+    guesser_chat_id = game['guesser_chat_id']
+    await context.bot.send_message(
+        chat_id=guesser_chat_id,
+        text="Загадывающий игрок добавил вам одну дополнительную попытку.",
+        parse_mode='Markdown'
+    )
+
+
+
 async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Получение загаданного слова и начало игры"""
     word = update.message.text.strip().lower()
@@ -221,6 +248,20 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         game['secret_word'] = word
         game['state'] = 'waiting_for_guess'
         await update.message.reply_text(WORD_SET_MESSAGE, parse_mode='Markdown')
+
+        # Обновляем команды для обоих игроков
+        await context.bot.set_my_commands([
+            ("start", START_COMMAND_DESCRIPTION),
+            ("say", SAY_COMMAND_DESCRIPTION),
+            ("cancel", CANCEL_COMMAND_DESCRIPTION),
+            ("addtry", ADDTRY_COMMAND_DESCRIPTION)
+        ], scope=BotCommandScopeChat(game['word_setter_chat_id']))
+
+        await context.bot.set_my_commands([
+            ("start", START_COMMAND_DESCRIPTION),
+            ("say", SAY_COMMAND_DESCRIPTION),
+            ("cancel", CANCEL_COMMAND_DESCRIPTION)
+        ], scope=BotCommandScopeChat(game['guesser_chat_id']))
 
         # Отправляем сообщение угадывающему
         guesser_chat_id = game['guesser_chat_id']
@@ -350,12 +391,25 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Удаляем игру
         delete_game(word_setter_username, guesser_username)
 
+        # Сбрасываем команды для обоих игроков
+        await context.bot.set_my_commands([
+            ("start", START_COMMAND_DESCRIPTION),
+            ("new_game", NEW_GAME_COMMAND_DESCRIPTION),
+            ("cancel", CANCEL_COMMAND_DESCRIPTION)
+        ], scope=BotCommandScopeChat(game['word_setter_chat_id']))
+
+        await context.bot.set_my_commands([
+            ("start", START_COMMAND_DESCRIPTION),
+            ("new_game", NEW_GAME_COMMAND_DESCRIPTION),
+            ("cancel", CANCEL_COMMAND_DESCRIPTION)
+        ], scope=BotCommandScopeChat(game['guesser_chat_id']))
+
         # Обновляем последнего партнёра
         user_data[word_setter_username]['last_partner'] = guesser_username
         user_data[guesser_username]['last_partner'] = word_setter_username
         save_user_data()
     else:
-        if attempt_number >= 6:
+        if attempt_number >= game['max_attempts']:
             await update.message.reply_text(
                 OUT_OF_ATTEMPTS_MESSAGE.format(secret_word=secret_word.upper()),
                 parse_mode='Markdown'
@@ -368,8 +422,21 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             # Удаляем игру
             del games[(word_setter_username, guesser_username)]
+
+            # Сбрасываем команды для обоих игроков
+            await context.bot.set_my_commands([
+                ("start", START_COMMAND_DESCRIPTION),
+                ("new_game", NEW_GAME_COMMAND_DESCRIPTION),
+                ("cancel", CANCEL_COMMAND_DESCRIPTION)
+            ], scope=BotCommandScopeChat(game['word_setter_chat_id']))
+
+            await context.bot.set_my_commands([
+                ("start", START_COMMAND_DESCRIPTION),
+                ("new_game", NEW_GAME_COMMAND_DESCRIPTION),
+                ("cancel", CANCEL_COMMAND_DESCRIPTION)
+            ], scope=BotCommandScopeChat(game['guesser_chat_id']))
         else:
-            remaining_attempts = 6 - attempt_number
+            remaining_attempts = game['max_attempts'] - attempt_number
             await update.message.reply_text(
                 TRY_AGAIN_MESSAGE.format(remaining_attempts=remaining_attempts),
                 parse_mode='Markdown'
@@ -426,7 +493,9 @@ async def main():
 
     application.add_handler(CommandHandler('start', start))
     application.add_handler(conv_handler)
+    application.add_handler(CommandHandler('addtry', addtry))
     application.add_handler(CommandHandler('say', say))
+    application.add_handler(CommandHandler('addtry', addtry))
     # Обработчик догадок
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, guess_word))
 
@@ -436,7 +505,8 @@ async def main():
         ("start", START_COMMAND_DESCRIPTION),
         ("new_game", NEW_GAME_COMMAND_DESCRIPTION),
         ("cancel", CANCEL_COMMAND_DESCRIPTION),
-        ("say", SAY_COMMAND_DESCRIPTION)
+        ("say", SAY_COMMAND_DESCRIPTION),
+        ("addtry", ADDTRY_COMMAND_DESCRIPTION)
     ])
 
     await application.run_polling()

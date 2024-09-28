@@ -43,6 +43,7 @@ START_COMMAND_DESCRIPTION = "Начать взаимодействие с бот
 NEW_GAME_COMMAND_DESCRIPTION = "Создать новую игру"
 CANCEL_COMMAND_DESCRIPTION = "Отменить текущую игру"
 SAY_COMMAND_DESCRIPTION = "Отправить сообщение другому игроку"
+ADDTRY_COMMAND_DESCRIPTION = "Добавить одну попытку угадывающему игроку"
 
 LANGUAGE_STRINGS = {
     'russian': 'русском языке',

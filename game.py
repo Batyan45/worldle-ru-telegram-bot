@@ -52,7 +52,8 @@ def create_game(word_setter_username, second_player_username, word_setter_chat_i
         'word_setter_chat_id': word_setter_chat_id,
         'guesser_chat_id': guesser_chat_id,
         'word_setter_username': word_setter_username,
-        'guesser_username': second_player_username
+        'guesser_username': second_player_username,
+        'max_attempts': 6
     }
 
 def get_game(word_setter_username, guesser_username):
