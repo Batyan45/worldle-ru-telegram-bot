@@ -225,7 +225,7 @@ async def addtry(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Получение загаданного слова и начало игры"""
     word = update.message.text.strip().lower()
-    if len(word) != 5 or not word.isalpha():
+    if len(word) not in range(4, 9) or not word.isalpha():
         await update.message.reply_text(INVALID_WORD_MESSAGE, parse_mode='Markdown')
         return WAITING_FOR_WORD
 
@@ -263,12 +263,19 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ("cancel", CANCEL_COMMAND_DESCRIPTION)
         ], scope=BotCommandScopeChat(game['guesser_chat_id']))
 
-        # Отправляем сообщение угадывающему
+        # Save the length of the word
+        length = len(word)
+
+        # Send message to the guesser
         guesser_chat_id = game['guesser_chat_id']
         language_str = LANGUAGE_STRINGS[game['language']]
         await context.bot.send_message(
             chat_id=guesser_chat_id,
-            text=GUESS_PROMPT_MESSAGE.format(word_setter_username=word_setter_username, language=language_str),
+            text=GUESS_PROMPT_MESSAGE.format(
+                word_setter_username=word_setter_username,
+                language=language_str,
+                length=length
+            ),
             parse_mode='Markdown'
         )
         save_user_data()
@@ -298,10 +305,14 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(NO_ACTIVE_GAME_MESSAGE, parse_mode='Markdown')
         return
 
-    if len(message) != 5 or not message.isalpha():
-        await update.message.reply_text(INVALID_GUESS_MESSAGE, parse_mode='Markdown')
-        return
+    secret_word = game['secret_word']
 
+    if len(message) != len(secret_word) or not message.isalpha():
+        await update.message.reply_text(
+            INVALID_GUESS_MESSAGE.format(length=len(secret_word)),
+            parse_mode='Markdown'
+        )
+        return
     # Проверяем язык догадки
     language = game.get('language', 'russian')
     if language == 'russian':
@@ -313,7 +324,6 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(INVALID_GUESS_LANGUAGE_MESSAGE, parse_mode='Markdown')
             return
 
-    secret_word = game['secret_word']
     result, feedback, correct_letters, used_letters = get_feedback(secret_word, message)
     game['attempts'].append((result, feedback))
 
