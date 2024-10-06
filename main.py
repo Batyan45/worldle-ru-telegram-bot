@@ -68,7 +68,7 @@ logging.basicConfig(
 )
 
 # Этапы разговора
-WAITING_FOR_SECOND_PLAYER, WAITING_FOR_WORD = range(2)
+WAITING_FOR_SECOND_PLAYER, WAITING_FOR_WORD, SAY_WAITING_FOR_MESSAGE = range(3)
 
 # Обработчик нажатий на кнопки
 
@@ -151,15 +151,45 @@ async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return WAITING_FOR_WORD
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отправка сообщения другому игроку"""
-    sender_username = update.message.from_user.username
+    """Команда /say для отправки сообщения другому игроку."""
+    sender_username = update.effective_user.username
     message_text = ' '.join(context.args)
 
-    if not message_text:
-        await update.message.reply_text("Пожалуйста, введите сообщение после команды /say.", parse_mode='Markdown')
-        return
+    # Удаляем сообщение с командой
+    try:
+        await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id)
+    except Exception as e:
+        logging.warning(f"Не удалось удалить сообщение: {e}")
 
-    # Поиск соответствующей игры
+    if message_text:
+        # Если текст передан вместе с командой
+        await send_say_message(update, context, message_text)
+        try:
+            await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id)
+        except Exception as e:
+            logging.warning(f"Не удалось удалить сообщение: {e}")
+    else:
+        # Если текст не передан, ожидаем следующего сообщения
+        await update.effective_message.reply_text("Введите сообщение, которое хотите отправить:")
+        return SAY_WAITING_FOR_MESSAGE
+
+async def receive_say_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Получение сообщения для отправки другому игроку."""
+    message_text = update.effective_message.text
+    # Удаляем технические сообщения
+    try:
+        await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id)
+        await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id - 1)
+    except Exception as e:
+        logging.warning(f"Не удалось удалить сообщение: {e}")
+
+    await send_say_message(update, context, message_text)
+    return ConversationHandler.END
+
+async def send_say_message(update: Update, context: ContextTypes.DEFAULT_TYPE, message_text):
+    """Отправка сообщения от одного игрока другому."""
+    sender_username = update.effective_user.username
+    # Поиск активной игры с участием пользователя
     game = next(
         (g for (w_s_username, g_username), g in games.items()
          if (w_s_username == sender_username or g_username == sender_username)
@@ -168,7 +198,7 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if not game:
-        await update.message.reply_text(NO_ACTIVE_GAME_MESSAGE_SAY, parse_mode='Markdown')
+        await update.effective_message.reply_text(NO_ACTIVE_GAME_MESSAGE_SAY, parse_mode='Markdown')
         return
 
     if sender_username == game['word_setter_username']:
@@ -178,10 +208,10 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
     receiver_chat_id = user_data.get(receiver_username, {}).get('chat_id')
 
     if not receiver_chat_id:
-        await update.message.reply_text("Не удалось найти чат другого игрока.", parse_mode='Markdown')
+        await update.effective_message.reply_text("Не удалось найти чат другого игрока.", parse_mode='Markdown')
         return
 
-    sender_chat_id = update.message.chat_id
+    sender_chat_id = update.effective_chat.id
 
     # Отправляем сообщение обоим игрокам
     for chat_id in [receiver_chat_id, sender_chat_id]:
@@ -190,9 +220,6 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=MESSAGE_RECEIVED.format(sender_username=f"_{sender_username}_", message_text=message_text),
             parse_mode='Markdown'
         )
-
-    # Удаляем сообщение пользователя с командой /say
-    await update.message.delete()
 
 
 
@@ -282,8 +309,19 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отмена текущего разговора."""
-    await update.message.reply_text(CANCEL_MESSAGE, parse_mode='Markdown')
+    """Отмена текущей игры."""
+    username = update.effective_user.username
+    # Ищем и удаляем активную игру с участием пользователя
+    game_key = next(
+        ((w_s_username, g_username) for (w_s_username, g_username) in games
+         if w_s_username == username or g_username == username),
+        None
+    )
+    if game_key:
+        del games[game_key]
+        await update.effective_message.reply_text(CANCEL_MESSAGE, parse_mode='Markdown')
+    else:
+        await update.effective_message.reply_text(NO_ACTIVE_GAME_MESSAGE, parse_mode='Markdown')
     return ConversationHandler.END
 
 async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -504,7 +542,15 @@ async def main():
     application.add_handler(CommandHandler('start', start))
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler('addtry', addtry))
-    application.add_handler(CommandHandler('say', say))
+    say_handler = ConversationHandler(
+        entry_points=[CommandHandler('say', say)],
+        states={
+            SAY_WAITING_FOR_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_say_message)],
+        },
+        fallbacks=[CommandHandler('cancel', cancel)],
+    )
+
+    application.add_handler(say_handler)
     application.add_handler(CommandHandler('addtry', addtry))
     # Обработчик догадок
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, guess_word))
