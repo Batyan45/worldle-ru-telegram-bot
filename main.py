@@ -64,7 +64,11 @@ from user import (
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.INFO,
+    handlers=[
+        logging.FileHandler('game_logs.log'),
+        logging.StreamHandler()
+    ]
 )
 
 # Этапы разговора
@@ -274,6 +278,15 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if game and game['state'] == 'waiting_for_word':
         game['secret_word'] = word
         game['state'] = 'waiting_for_guess'
+        
+        # Логируем начало игры
+        logging.info(
+            f"Game started - Word setter: {word_setter_username}, "
+            f"Guesser: {guesser_username}, "
+            f"Secret word: {word}, "
+            f"Language: {game['language']}"
+        )
+
         await update.message.reply_text(WORD_SET_MESSAGE, parse_mode='Markdown')
 
         # Обновляем команды для обоих игроков
@@ -362,6 +375,14 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(INVALID_GUESS_LANGUAGE_MESSAGE, parse_mode='Markdown')
             return
 
+    # Добавляем логирование попытки
+    logging.info(
+        f"Guess attempt - Player: {guesser_username}, "
+        f"Secret word: {secret_word}, "
+        f"Guess: {message}, "
+        f"Attempt #{len(game['attempts']) + 1}"
+    )
+
     result, feedback, correct_letters, used_letters = get_feedback(secret_word, message)
     game['attempts'].append((result, feedback))
 
@@ -419,7 +440,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Сохраняем ID последнего сообщения с попытками и алфавитом
     context.user_data['last_attempt_message'] = sent_message.message_id
 
-    # Отправляем попытку загадавшему игроку с припиской
+    # Отправляем попытку загада��шему игроку с припиской
     word_setter_chat_id = game['word_setter_chat_id']
     await context.bot.send_message(
         chat_id=word_setter_chat_id,
@@ -433,6 +454,13 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if message == secret_word:
+        # Логируем успешное завершение игры
+        logging.info(
+            f"Game won - Guesser: {guesser_username} won against {word_setter_username}, "
+            f"Secret word: {secret_word}, "
+            f"Attempts used: {attempt_number}/{game['max_attempts']}"
+        )
+
         await update.message.reply_text(GUESSER_WIN_MESSAGE, parse_mode='Markdown')
 
         # Отправляем сообщение загадывающему
@@ -464,6 +492,13 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_user_data()
     else:
         if attempt_number >= game['max_attempts']:
+            # Логируем проигрыш
+            logging.info(
+                f"Game lost - Guesser: {guesser_username} lost against {word_setter_username}, "
+                f"Secret word: {secret_word}, "
+                f"All {game['max_attempts']} attempts used"
+            )
+
             await update.message.reply_text(
                 OUT_OF_ATTEMPTS_MESSAGE.format(secret_word=secret_word.upper()),
                 parse_mode='Markdown'
