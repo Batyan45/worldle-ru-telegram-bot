@@ -377,7 +377,10 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Формируем сообщение с последней попыткой и номером для загадавшего
     attempt_text_setter = ATTEMPT_MESSAGE.format(
-        attempt_number=attempt_number, result=result, feedback=feedback
+        attempt_number=attempt_number,
+        max_attempts=game['max_attempts'],
+        result=result,
+        feedback=feedback
     )
 
     await update.message.reply_text(attempt_text_setter, parse_mode='Markdown')
@@ -421,7 +424,10 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=word_setter_chat_id,
         text=ATTEMPT_MESSAGE.format(
-            attempt_number=attempt_number, result=result, feedback=feedback
+            attempt_number=attempt_number,
+            max_attempts=game['max_attempts'],
+            result=result,
+            feedback=feedback
         ),
         parse_mode='Markdown'
     )
@@ -574,3 +580,4 @@ if __name__ == '__main__':
         asyncio.run(main())
     finally:
         save_user_data()
+

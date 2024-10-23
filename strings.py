@@ -1,4 +1,3 @@
-
 START_MESSAGE = (
     "Привет! Это игра для двух игроков в стиле Wordle.\n"
     "Используй команду /new_game, чтобы начать новую игру."
@@ -25,7 +24,7 @@ WORD_SET_MESSAGE = "Слово загадано!"
 GUESS_PROMPT_MESSAGE = "{word_setter_username} загадал(а) слово из {length} букв на {language}. Попробуй угадать его!"
 NO_ACTIVE_GAME_MESSAGE = "У вас нет активных игр. Начните новую с помощью команды /new_game."
 INVALID_GUESS_MESSAGE = "Догадка должна состоять из {length} букв."
-ATTEMPT_MESSAGE = "Попытка {attempt_number}:\n{result}\n{feedback}"
+ATTEMPT_MESSAGE = "Попытка {attempt_number} (из {max_attempts}):\n`{result}` | `{feedback}`"
 GUESSER_WIN_MESSAGE = "🎉 Поздравляем! Вы угадали слово! 🎉"
 WORD_SETTER_WIN_MESSAGE = "Игрок {guesser_username} угадал ваше слово!"
 OUT_OF_ATTEMPTS_MESSAGE = (

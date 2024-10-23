@@ -1,3 +1,8 @@
+import os
+from dotenv import load_dotenv
 
-# Replace 'YOUR_TELEGRAM_BOT_TOKEN' with your actual bot token
-TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'
+# Загрузка переменных окружения из .env файла
+load_dotenv()
+
+# Загрузка токена из переменной окружения
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
