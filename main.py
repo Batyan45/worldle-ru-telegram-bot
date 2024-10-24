@@ -62,13 +62,27 @@ from user import (
 )
 
 # Настройка логирования
+# Создаем отдельный логгер для игры
+game_logger = logging.getLogger('game')
+game_logger.setLevel(logging.INFO)
+
+# Создаем форматтер
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# Создаем хендлеры
+file_handler = logging.FileHandler('game_logs.log')
+file_handler.setFormatter(formatter)
+
+# Добавляем хендлеры к логгеру
+game_logger.addHandler(file_handler)
+
+# Отключаем передачу логов родительскому логгеру
+game_logger.propagate = False
+
+# Базовая настройка для системных логов
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
-    handlers=[
-        logging.FileHandler('game_logs.log'),
-        logging.StreamHandler()
-    ]
+    level=logging.INFO
 )
 
 # Этапы разговора
@@ -280,7 +294,7 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         game['state'] = 'waiting_for_guess'
         
         # Логируем начало игры
-        logging.info(
+        game_logger.info(
             f"Game started - Word setter: {word_setter_username}, "
             f"Guesser: {guesser_username}, "
             f"Secret word: {word}, "
@@ -376,7 +390,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     # Добавляем логирование попытки
-    logging.info(
+    game_logger.info(
         f"Guess attempt - Player: {guesser_username}, "
         f"Secret word: {secret_word}, "
         f"Guess: {message}, "
@@ -440,7 +454,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Сохраняем ID последнего сообщения с попытками и алфавитом
     context.user_data['last_attempt_message'] = sent_message.message_id
 
-    # Отправляем попытку загада��шему игроку с припиской
+    # Отправляем попытку загадавшему игроку с припиской
     word_setter_chat_id = game['word_setter_chat_id']
     await context.bot.send_message(
         chat_id=word_setter_chat_id,
@@ -455,7 +469,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if message == secret_word:
         # Логируем успешное завершение игры
-        logging.info(
+        game_logger.info(
             f"Game won - Guesser: {guesser_username} won against {word_setter_username}, "
             f"Secret word: {secret_word}, "
             f"Attempts used: {attempt_number}/{game['max_attempts']}"
@@ -493,7 +507,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         if attempt_number >= game['max_attempts']:
             # Логируем проигрыш
-            logging.info(
+            game_logger.info(
                 f"Game lost - Guesser: {guesser_username} lost against {word_setter_username}, "
                 f"Secret word: {secret_word}, "
                 f"All {game['max_attempts']} attempts used"
