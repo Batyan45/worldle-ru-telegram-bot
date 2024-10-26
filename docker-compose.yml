@@ -3,8 +3,10 @@ version: '3.8'
 services:
   bot:
     build: .
-    restart: always
-    environment:
-      - BOT_TOKEN=${BOT_TOKEN}
     volumes:
-      - ./logs:/app/logs
+      - bot_data:/app/data
+    environment:
+      - TELEGRAM_BOT_TOKEN=your_token_here
+
+volumes:
+  bot_data:
