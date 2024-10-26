@@ -95,17 +95,35 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     username = user.username
     chat_id = update.message.chat_id
+
+    # Добавляем логирование
+    logging.info(f"Start command received - Username: {username}, Chat ID: {chat_id}")
+
+    # Проверяем наличие username
+    if not username:
+        logging.warning("User without username tried to start bot")
+        await update.message.reply_text(
+            NO_USERNAME_MESSAGE,
+            parse_mode='Markdown'
+        )
+        return
+
     # Сохраняем chat_id пользователя
-    word_setter_username = username
-    if username:
-        if username not in user_data:
-            user_data[username] = {}
-        user_data[username]['chat_id'] = chat_id
+    if username not in user_data:
+        user_data[username] = {}
+    user_data[username]['chat_id'] = chat_id
+    
+    try:
         await update.message.reply_text(
             START_MESSAGE,
             parse_mode='Markdown'
         )
-        save_user_data()
+        logging.info(f"Start message sent successfully to {username}")
+    except Exception as e:
+        logging.error(f"Error sending start message: {str(e)}")
+        raise
+        
+    save_user_data()
 
 
 async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -629,4 +647,6 @@ if __name__ == '__main__':
         asyncio.run(main())
     finally:
         save_user_data()
+
+
 
