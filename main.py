@@ -521,16 +521,6 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=WORD_SETTER_WIN_MESSAGE.format(guesser_username=guesser_username),
             parse_mode='Markdown'
         )
-        if gif_path:
-            try:
-                with open(gif_path, 'rb') as gif:
-                    await context.bot.send_animation(
-                        chat_id=word_setter_chat_id,
-                        animation=gif
-                    )
-            except Exception as e:
-                logging.error(f"Failed to send GIF to word setter: {e}")
-
         # Удаляем игру
         delete_game(word_setter_username, guesser_username)
 
