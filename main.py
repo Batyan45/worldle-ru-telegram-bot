@@ -1,5 +1,8 @@
 # main.py
 
+import os
+import random
+from pathlib import Path
 import logging
 import asyncio
 import nest_asyncio
@@ -283,7 +286,16 @@ async def addtry(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-
+def get_random_gif(directory):
+    """Get a random GIF file from the specified directory."""
+    try:
+        gif_files = list(Path(directory).glob('*.gif'))
+        if gif_files:
+            return str(random.choice(gif_files))
+        return None
+    except Exception as e:
+        logging.error(f"Error getting random GIF: {e}")
+        return None
 
 async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Получение загаданного слова и начало игры"""
@@ -493,14 +505,31 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Attempts used: {attempt_number}/{game['max_attempts']}"
         )
 
+        # Отправляем сообщение и GIF только угадавшему
         await update.message.reply_text(GUESSER_WIN_MESSAGE, parse_mode='Markdown')
+        gif_path = get_random_gif('gif/win')
+        if gif_path:
+            try:
+                with open(gif_path, 'rb') as gif:
+                    await update.message.reply_animation(animation=gif)
+            except Exception as e:
+                logging.error(f"Failed to send GIF: {e}")
 
-        # Отправляем сообщение загадывающему
+        # Отправляем только текстовое сообщение загадывающему
         await context.bot.send_message(
             chat_id=word_setter_chat_id,
             text=WORD_SETTER_WIN_MESSAGE.format(guesser_username=guesser_username),
             parse_mode='Markdown'
         )
+        if gif_path:
+            try:
+                with open(gif_path, 'rb') as gif:
+                    await context.bot.send_animation(
+                        chat_id=word_setter_chat_id,
+                        animation=gif
+                    )
+            except Exception as e:
+                logging.error(f"Failed to send GIF to word setter: {e}")
 
         # Удаляем игру
         delete_game(word_setter_username, guesser_username)
@@ -612,22 +641,22 @@ async def main():
         fallbacks=[CommandHandler('cancel', cancel)],
     )
 
-    application.add_handler(CommandHandler('start', start))
-    application.add_handler(conv_handler)
-    application.add_handler(CommandHandler('addtry', addtry))
-    say_handler = ConversationHandler(
-        entry_points=[CommandHandler('say', say)],
-        states={
-            SAY_WAITING_FOR_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_say_message)],
-        },
-        fallbacks=[CommandHandler('cancel', cancel)],
-    )
+    handlers = [
+        CommandHandler('start', start),
+        conv_handler,
+        ConversationHandler(
+            entry_points=[CommandHandler('say', say)],
+            states={
+                SAY_WAITING_FOR_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_say_message)],
+            },
+            fallbacks=[CommandHandler('cancel', cancel)],
+        ),
+        CommandHandler('addtry', addtry),
+        MessageHandler(filters.TEXT & ~filters.COMMAND, guess_word)
+    ]
 
-    application.add_handler(say_handler)
-    application.add_handler(CommandHandler('addtry', addtry))
-    # Обработчик догадок
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, guess_word))
-
+    for handler in handlers:
+        application.add_handler(handler)
 
     # Set bot commands for the command hints
     await application.bot.set_my_commands([
@@ -647,6 +676,4 @@ if __name__ == '__main__':
         asyncio.run(main())
     finally:
         save_user_data()
-
-
 
