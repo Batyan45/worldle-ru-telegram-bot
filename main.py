@@ -119,11 +119,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await update.message.reply_text(
             START_MESSAGE,
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         logging.info(f"Start message sent successfully to {username}")
     except Exception as e:
         logging.error(f"Error sending start message: {str(e)}")
+        await update.message.reply_text(
+            START_MESSAGE,
+            parse_mode=None
+        )
         raise
         
     save_user_data()
