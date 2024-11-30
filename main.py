@@ -64,45 +64,45 @@ from user import (
     save_user_data
 )
 
-# Настройка логирования
-# Создаем отдельный логгер для игры
+# Logging setup
+# Create a separate logger for the game
 game_logger = logging.getLogger('game')
 game_logger.setLevel(logging.INFO)
 
-# Создаем форматтер
+# Create a formatter
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
-# Создаем хендлеры
+# Create handlers
 file_handler = logging.FileHandler('game_logs.log')
 file_handler.setFormatter(formatter)
 
-# Добавляем хендлеры к логгеру
+# Add handlers to logger
 game_logger.addHandler(file_handler)
 
-# Отключаем передачу логов родительскому логгеру
+# Disable log propagation to parent logger
 game_logger.propagate = False
 
-# Базовая настройка для системных логов
+# Basic setup for system logs
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-# Этапы разговора
+# Conversation stages
 WAITING_FOR_SECOND_PLAYER, WAITING_FOR_WORD, SAY_WAITING_FOR_MESSAGE = range(3)
 
-# Обработчик нажатий на кнопки
+# Button click handler
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /start"""
+    """Start command /start"""
     user = update.message.from_user
     username = user.username
     chat_id = update.message.chat_id
 
-    # Добавляем логирование
+    # Add logging
     logging.info(f"Start command received - Username: {username}, Chat ID: {chat_id}")
 
-    # Проверяем наличие username
+    # Check for username
     if not username:
         logging.warning("User without username tried to start bot")
         await update.message.reply_text(
@@ -111,7 +111,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Сохраняем chat_id пользователя
+    # Save user's chat_id
     if username not in user_data:
         user_data[username] = {}
     user_data[username]['chat_id'] = chat_id
@@ -134,7 +134,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /new_game для начала новой игры"""
+    """Command /new_game to start a new game"""
     user = update.message.from_user
     username = user.username
     if not username:
@@ -143,7 +143,7 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     last_partner = user_data.get(username, {}).get('last_partner')
     if last_partner:
-        keyboard = [[InlineKeyboardButton(f"Играть с @{last_partner}", callback_data=f"last_partner_{last_partner}")]]
+        keyboard = [[InlineKeyboardButton(f"Play with @{last_partner}", callback_data=f"last_partner_{last_partner}")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(NEW_GAME_MESSAGE, parse_mode='Markdown', reply_markup=reply_markup)
     else:
@@ -152,11 +152,11 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Установка второго игрока"""
+    """Set the second player"""
     second_player = update.message.text.strip()
     if not second_player.startswith('@'):
-        second_player = '@' + second_player  # Добавляем '@' в начало
-    second_player_username = second_player[1:]  # Убираем '@'
+        second_player = '@' + second_player  # Add '@' at the beginning
+    second_player_username = second_player[1:]  # Remove '@'
 
     word_setter_username = update.message.from_user.username
     if second_player_username not in user_data or get_game(word_setter_username, second_player_username):
@@ -171,14 +171,14 @@ async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['word_setter_username'] = word_setter_username
     context.user_data['guesser_username'] = second_player_username
 
-    # Сохраняем последнего партнёра для каждого пользователя
+    # Save the last partner for each user
     user_data[word_setter_username]['last_partner'] = second_player_username
     user_data[second_player_username]['last_partner'] = word_setter_username
     save_user_data()
 
     guesser_chat_id = user_data[second_player_username]['chat_id']
 
-    # Создаём новую игру
+    # Create a new game
     create_game(word_setter_username, second_player_username, word_setter_chat_id, guesser_chat_id)
 
     await update.message.reply_text(
@@ -194,45 +194,45 @@ async def set_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return WAITING_FOR_WORD
 
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /say для отправки сообщения другому игроку."""
+    """Command /say to send a message to another player."""
     sender_username = update.effective_user.username
     message_text = ' '.join(context.args)
 
-    # Удаляем сообщение с командой
+    # Delete the command message
     try:
         await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id)
     except Exception as e:
-        logging.warning(f"Не удалось удалить сообщение: {e}")
+        logging.warning(f"Failed to delete message: {e}")
 
     if message_text:
-        # Если текст передан вместе с командой
+        # If text is provided with the command
         await send_say_message(update, context, message_text)
         try:
             await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id)
         except Exception as e:
-            logging.warning(f"Не удалось удалить сообщение: {e}")
+            logging.warning(f"Failed to delete message: {e}")
     else:
-        # Если текст не передан, ожидаем следующего сообщения
-        await update.effective_message.reply_text("Введите сообщение, которое хотите отправить:")
+        # If text is not provided, wait for the next message
+        await update.effective_message.reply_text("Enter the message you want to send:")
         return SAY_WAITING_FOR_MESSAGE
 
 async def receive_say_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Получение сообщения для отправки другому игроку."""
+    """Receive a message to send to another player."""
     message_text = update.effective_message.text
-    # Удаляем технические сообщения
+    # Delete technical messages
     try:
         await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id)
         await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id - 1)
     except Exception as e:
-        logging.warning(f"Не удалось удалить сообщение: {e}")
+        logging.warning(f"Failed to delete message: {e}")
 
     await send_say_message(update, context, message_text)
     return ConversationHandler.END
 
 async def send_say_message(update: Update, context: ContextTypes.DEFAULT_TYPE, message_text):
-    """Отправка сообщения от одного игрока другому."""
+    """Send a message from one player to another."""
     sender_username = update.effective_user.username
-    # Поиск активной игры с участием пользователя
+    # Find an active game involving the user
     game = next(
         (g for (w_s_username, g_username), g in games.items()
          if (w_s_username == sender_username or g_username == sender_username)
@@ -251,12 +251,12 @@ async def send_say_message(update: Update, context: ContextTypes.DEFAULT_TYPE, m
     receiver_chat_id = user_data.get(receiver_username, {}).get('chat_id')
 
     if not receiver_chat_id:
-        await update.effective_message.reply_text("Не удалось найти чат другого игрока.", parse_mode='Markdown')
+        await update.effective_message.reply_text("Failed to find the chat of the other player.", parse_mode='Markdown')
         return
 
     sender_chat_id = update.effective_chat.id
 
-    # Отправляем сообщение обоим игрокам
+    # Send the message to both players
     for chat_id in [receiver_chat_id, sender_chat_id]:
         await context.bot.send_message(
             chat_id=chat_id,
@@ -267,26 +267,26 @@ async def send_say_message(update: Update, context: ContextTypes.DEFAULT_TYPE, m
 
 
 async def addtry(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /addtry для добавления одной попытки угадывающему игроку."""
+    """Command /addtry to add one attempt to the guessing player."""
     word_setter_username = update.message.from_user.username
-    # Найдём текущую игру для загадывающего игрока
+    # Find the current game for the word setter
     game = next(
         (g for (w_s_username, g_username), g in games.items()
          if w_s_username == word_setter_username and g['state'] == 'waiting_for_guess'),
         None
     )
     if not game:
-        await update.message.reply_text("У вас нет активной игры, чтобы добавить попытку.", parse_mode='Markdown')
+        await update.message.reply_text("You don't have an active game to add an attempt.", parse_mode='Markdown')
         return
 
     game['max_attempts'] += 1
-    await update.message.reply_text("Вы добавили одну дополнительную попытку угадывающему игроку.", parse_mode='Markdown')
+    await update.message.reply_text("You have added one additional attempt to the guessing player.", parse_mode='Markdown')
 
-    # Уведомляем угадывающего игрока
+    # Notify the guessing player
     guesser_chat_id = game['guesser_chat_id']
     await context.bot.send_message(
         chat_id=guesser_chat_id,
-        text="Загадывающий игрок добавил вам одну дополнительную попытку.",
+        text="The word setter has added one additional attempt for you.",
         parse_mode='Markdown'
     )
 
@@ -302,7 +302,7 @@ def get_random_gif(directory):
         return None
 
 async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Получение загаданного слова и начало игры"""
+    """Receive the secret word and start the game"""
     word = update.message.text.strip().lower()
     if len(word) not in range(4, 9) or not word.isalpha():
         await update.message.reply_text(INVALID_WORD_MESSAGE, parse_mode='Markdown')
@@ -312,7 +312,7 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     guesser_username = context.user_data['guesser_username']
     game = get_game(word_setter_username, guesser_username)
 
-    # Определяем язык
+    # Determine the language
     if all('а' <= c <= 'я' or c == 'ё' for c in word):
         game['language'] = 'russian'
     elif all('a' <= c <= 'z' for c in word):
@@ -327,7 +327,7 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         game['secret_word'] = word
         game['state'] = 'waiting_for_guess'
         
-        # Логируем начало игры
+        # Log the start of the game
         game_logger.info(
             f"Game started - Word setter: {word_setter_username}, "
             f"Guesser: {guesser_username}, "
@@ -337,7 +337,7 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(WORD_SET_MESSAGE, parse_mode='Markdown')
 
-        # Обновляем команды для обоих игроков
+        # Update commands for both players
         await context.bot.set_my_commands([
             ("start", START_COMMAND_DESCRIPTION),
             ("say", SAY_COMMAND_DESCRIPTION),
@@ -370,9 +370,9 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отмена текущей игры."""
+    """Cancel the current game."""
     username = update.effective_user.username
-    # Ищем и удаляем активную игру с участием пользователя
+    # Find and delete the active game involving the user
     game_key = next(
         ((w_s_username, g_username) for (w_s_username, g_username) in games
          if w_s_username == username or g_username == username),
@@ -386,11 +386,11 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка догадок игрока"""
+    """Handle player's guesses"""
     guesser_username = update.message.from_user.username
     message = update.message.text.strip().lower()
 
-    # Поиск соответствующей игры
+    # Find the corresponding game
     game = next(
         (g for (w_s_username, g_username), g in games.items() if g_username == guesser_username and g['state'] == 'waiting_for_guess'),
         None
@@ -412,7 +412,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
         return
-    # Проверяем язык догадки
+    # Check the language of the guess
     language = game.get('language', 'russian')
     if language == 'russian':
         if not all('а' <= c <= 'я' or c == 'ё' for c in message):
@@ -423,7 +423,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(INVALID_GUESS_LANGUAGE_MESSAGE, parse_mode='Markdown')
             return
 
-    # Добавляем логирование попытки
+    # Add logging for the attempt
     game_logger.info(
         f"Guess attempt - Player: {guesser_username}, "
         f"Secret word: {secret_word}, "
@@ -434,7 +434,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result, feedback, correct_letters, used_letters = get_feedback(secret_word, message)
     game['attempts'].append((result, feedback))
 
-    # Обновляем списки использованных и правильных букв без повторений
+    # Update lists of used and correct letters without duplicates
     if 'correct_letters' not in game:
         game['correct_letters'] = set()
     if 'used_letters' not in game:
@@ -444,7 +444,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     attempt_number = len(game['attempts'])
 
-    # Формируем сообщение с последней попыткой и номером для загадавшего
+    # Form the message with the last attempt and number for the word setter
     attempt_text_setter = ATTEMPT_MESSAGE.format(
         attempt_number=attempt_number,
         max_attempts=game['max_attempts'],
@@ -454,12 +454,12 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(attempt_text_setter, parse_mode='Markdown')
 
-    # Формируем сообщение для угадывающего с двумя столбцами
+    # Form the message for the guesser with two columns
     attempts_text = "\n".join(
         f"`{attempt[0]}` | `{attempt[1]}`" for attempt in game['attempts']
     )
 
-    # Формируем алфавит
+    # Form the alphabet
     if language == 'russian':
         alphabet = RUSSIAN_ALPHABET
     else:
@@ -469,7 +469,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     remaining_letters = alphabet - game['correct_letters'] - game['used_letters']
     remaining_letters_display = " ".join(sorted(remaining_letters))
 
-    # Удаляем предыдущее сообщение с попытками и алфавитом, если оно существует
+    # Delete the previous message with attempts and alphabet if it exists
     if 'last_attempt_message' in context.user_data:
         try:
             await context.bot.delete_message(
@@ -479,16 +479,16 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.warning(f"Failed to delete message: {e}")
 
-    # Отправляем новое сообщение угадывающему
+    # Send the new message to the guesser
     sent_message = await update.message.reply_text(
         f"{attempts_text}\n\n{remaining_letters_display}\n\n🟩🟨: {correct_letters_display}\n\n⬜: {used_letters_display}",
         parse_mode='Markdown'
     )
 
-    # Сохраняем ID последнего сообщения с попытками и алфавитом
+    # Save the ID of the last message with attempts and alphabet
     context.user_data['last_attempt_message'] = sent_message.message_id
 
-    # Отправляем попытку загадавшему игроку с припиской
+    # Send the attempt to the word setter with a note
     word_setter_chat_id = game['word_setter_chat_id']
     await context.bot.send_message(
         chat_id=word_setter_chat_id,
@@ -502,14 +502,14 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if message.replace('ё', 'е').replace('Ё', 'Е') == secret_word.replace('ё', 'е').replace('Ё', 'Е'):
-        # Логируем успешное завершение игры
+        # Log the successful completion of the game
         game_logger.info(
             f"Game won - Guesser: {guesser_username} won against {word_setter_username}, "
             f"Secret word: {secret_word}, "
             f"Attempts used: {attempt_number}/{game['max_attempts']}"
         )
 
-        # Отправляем сообщение и GIF только угадавшему
+        # Send the message and GIF only to the guesser
         await update.message.reply_text(GUESSER_WIN_MESSAGE, parse_mode='Markdown')
         gif_path = get_random_gif('gif/win')
         if gif_path:
@@ -519,16 +519,16 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logging.error(f"Failed to send GIF: {e}")
 
-        # Отправляем только текстовое сообщение загадывающему
+        # Send only the text message to the word setter
         await context.bot.send_message(
             chat_id=word_setter_chat_id,
             text=WORD_SETTER_WIN_MESSAGE.format(guesser_username=guesser_username),
             parse_mode='Markdown'
         )
-        # Удаляем игру
+        # Delete the game
         delete_game(word_setter_username, guesser_username)
 
-        # Сбрасываем команды для обоих игроков
+        # Reset commands for both players
         await context.bot.set_my_commands([
             ("start", START_COMMAND_DESCRIPTION),
             ("new_game", NEW_GAME_COMMAND_DESCRIPTION),
@@ -541,13 +541,13 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ("cancel", CANCEL_COMMAND_DESCRIPTION)
         ], scope=BotCommandScopeChat(game['guesser_chat_id']))
 
-        # Обновляем последнего партнёра
+        # Update the last partner
         user_data[word_setter_username]['last_partner'] = guesser_username
         user_data[guesser_username]['last_partner'] = word_setter_username
         save_user_data()
     else:
         if attempt_number >= game['max_attempts']:
-            # Логируем проигрыш
+            # Log the loss
             game_logger.info(
                 f"Game lost - Guesser: {guesser_username} lost against {word_setter_username}, "
                 f"Secret word: {secret_word}, "
@@ -558,16 +558,16 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 OUT_OF_ATTEMPTS_MESSAGE.format(secret_word=secret_word.upper()),
                 parse_mode='Markdown'
             )
-            # Информируем загадавшего игрока
+            # Inform the word setter
             await context.bot.send_message(
                 chat_id=word_setter_chat_id,
                 text=WORD_SETTER_LOSS_MESSAGE.format(guesser_username=guesser_username),
                 parse_mode='Markdown'
             )
-            # Удаляем игру
+            # Delete the game
             del games[(word_setter_username, guesser_username)]
 
-            # Сбрасываем команды для обоих игроков
+            # Reset commands for both players
             await context.bot.set_my_commands([
                 ("start", START_COMMAND_DESCRIPTION),
                 ("new_game", NEW_GAME_COMMAND_DESCRIPTION),
@@ -588,7 +588,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_last_partner(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка нажатия на кнопку с последним партнёром"""
+    """Handle clicking on the button with the last partner"""
     query = update.callback_query
     await query.answer()
     last_partner_username = query.data.replace('last_partner_', '')
@@ -596,12 +596,12 @@ async def handle_last_partner(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data['word_setter_username'] = word_setter_username
     context.user_data['guesser_username'] = last_partner_username
 
-    # Создаём новую игру
+    # Create a new game
     word_setter_chat_id = user_data[word_setter_username]['chat_id']
     guesser_chat_id = user_data[last_partner_username]['chat_id']
     create_game(word_setter_username, last_partner_username, word_setter_chat_id, guesser_chat_id)
 
-    # Сохраняем последнего партнёра
+    # Save the last partner
     user_data[word_setter_username]['last_partner'] = last_partner_username
     save_user_data()
 
@@ -610,7 +610,7 @@ async def handle_last_partner(update: Update, context: ContextTypes.DEFAULT_TYPE
         parse_mode='Markdown'
     )
 
-    # Уведомляем второго игрока, что первый игрок загадывает слово
+    # Notify the second player that the first player is setting a word
     await context.bot.send_message(
         chat_id=guesser_chat_id,
         text=SECOND_PLAYER_WAITING_MESSAGE.format(word_setter_username=word_setter_username),
@@ -620,7 +620,7 @@ async def handle_last_partner(update: Update, context: ContextTypes.DEFAULT_TYPE
     return WAITING_FOR_WORD
 
 async def main():
-    """Основная функция запуска бота"""
+    """Main function to start the bot"""
     application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
     conv_handler = ConversationHandler(

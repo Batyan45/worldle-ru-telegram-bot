@@ -1,7 +1,7 @@
 games = {}
 
 def get_feedback(secret_word, guess):
-    """Функция для предоставления обратной связи по догадке"""
+    """Function to provide feedback for a guess"""
     # Normalize 'Ё' to 'Е' in both secret word and guess
     secret_word = secret_word.replace('ё', 'е').replace('Ё', 'Е')
     guess = guess.replace('ё', 'е').replace('Ё', 'Е')
@@ -46,7 +46,7 @@ def get_feedback(secret_word, guess):
     return result, feedback, correct_letters, used_letters
 
 def create_game(word_setter_username, second_player_username, word_setter_chat_id, guesser_chat_id):
-    """Создание новой игры"""
+    """Create a new game"""
     games[(word_setter_username, second_player_username)] = {
         'state': 'waiting_for_word',
         'secret_word': '',
@@ -59,10 +59,10 @@ def create_game(word_setter_username, second_player_username, word_setter_chat_i
     }
 
 def get_game(word_setter_username, guesser_username):
-    """Получение игры по именам пользователей"""
+    """Get game by usernames"""
     return games.get((word_setter_username, guesser_username))
 
 def delete_game(word_setter_username, guesser_username):
-    """Удаление игры"""
+    """Delete game"""
     if (word_setter_username, guesser_username) in games:
         del games[(word_setter_username, guesser_username)]
