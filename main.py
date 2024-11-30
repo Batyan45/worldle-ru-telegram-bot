@@ -501,7 +501,7 @@ async def guess_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-    if message == secret_word:
+    if message.replace('ё', 'е').replace('Ё', 'Е') == secret_word.replace('ё', 'е').replace('Ё', 'Е'):
         # Логируем успешное завершение игры
         game_logger.info(
             f"Game won - Guesser: {guesser_username} won against {word_setter_username}, "

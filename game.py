@@ -3,25 +3,46 @@ games = {}
 def get_feedback(secret_word, guess):
     """Функция для предоставления обратной связи по догадке"""
     # Normalize 'Ё' to 'Е' in both secret word and guess
-    secret_word = secret_word.replace('ё', 'е')
-    guess = guess.replace('ё', 'е')
+    secret_word = secret_word.replace('ё', 'е').replace('Ё', 'Е')
+    guess = guess.replace('ё', 'е').replace('Ё', 'Е')
     
     feedback = ""
     result = ""
     correct_letters = set()
     used_letters = set()
-    for s_char, g_char in zip(secret_word, guess):
-        g_char_upper = g_char.upper()
+    
+    # Create a list to track used positions for yellow marks
+    secret_chars = list(secret_word)
+    marked_positions = set()
+
+    # First pass - mark green squares
+    for i, (s_char, g_char) in enumerate(zip(secret_word, guess)):
         if g_char == s_char:
-            feedback += f"🟩"
-            correct_letters.add(g_char_upper)
-        elif g_char in secret_word:
-            feedback += f"🟨"
-            correct_letters.add(g_char_upper)
+            feedback += "🟩"
+            result += g_char.upper()
+            correct_letters.add(g_char.upper())
+            marked_positions.add(i)
+            secret_chars[i] = None  # Mark as used
         else:
-            feedback += f"⬜"
+            feedback += " "  # Placeholder
+            result += " "   # Placeholder
+
+    # Second pass - mark yellow and white squares
+    for i, g_char in enumerate(guess):
+        if i in marked_positions:
+            continue
+            
+        g_char_upper = g_char.upper()
+        result = result[:i] + g_char_upper + result[i+1:]
+        
+        if g_char in secret_chars:
+            feedback = feedback[:i] + "🟨" + feedback[i+1:]
+            correct_letters.add(g_char_upper)
+            secret_chars.remove(g_char)  # Remove first occurrence
+        else:
+            feedback = feedback[:i] + "⬜" + feedback[i+1:]
             used_letters.add(g_char_upper)
-        result += g_char_upper
+            
     return result, feedback, correct_letters, used_letters
 
 def create_game(word_setter_username, second_player_username, word_setter_chat_id, guesser_chat_id):
