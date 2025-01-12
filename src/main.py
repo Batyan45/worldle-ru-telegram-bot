@@ -1,7 +1,9 @@
 """Main application entry point."""
 
 import asyncio
+import logging
 import nest_asyncio
+from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -96,7 +98,7 @@ async def main() -> None:
         for handler in handlers:
             application.add_handler(handler)
 
-        # Set bot commands for the command hints
+        # Set default bot commands
         await application.bot.set_my_commands([
             (cmd.command, cmd.description) for cmd in DEFAULT_COMMANDS
         ])

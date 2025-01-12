@@ -38,6 +38,7 @@ from src.config.strings import (
     LANGUAGE_STRINGS
 )
 from src.bot.keyboards.inline import create_last_partner_keyboard
+from src.bot.commands import update_user_commands
 
 
 # Conversation stages
@@ -193,6 +194,15 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             ),
             parse_mode='Markdown'
         )
+
+        # Update commands for both players
+        await update_user_commands(update, context)
+        # Create a fake update for the guesser to update their commands
+        guesser_update = Update(0)
+        guesser_update._effective_user = type('User', (), {'username': guesser_username})()
+        guesser_update._effective_chat = type('Chat', (), {'id': game.guesser_chat_id})()
+        await update_user_commands(guesser_update, context)
+
         return ConversationHandler.END
 
 
@@ -215,8 +225,20 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         None
     )
     if game_key:
+        game = games[game_key]
+        other_username = game.guesser_username if username == game.word_setter_username else game.word_setter_username
+        other_chat_id = game.guesser_chat_id if username == game.word_setter_username else game.word_setter_chat_id
+
         del games[game_key]
         await update.effective_message.reply_text(CANCEL_MESSAGE, parse_mode='Markdown')
+
+        # Update commands for both players
+        await update_user_commands(update, context)
+        # Create a fake update for the other player to update their commands
+        other_update = Update(0)
+        other_update._effective_user = type('User', (), {'username': other_username})()
+        other_update._effective_chat = type('Chat', (), {'id': other_chat_id})()
+        await update_user_commands(other_update, context)
     else:
         await update.effective_message.reply_text(NO_ACTIVE_GAME_MESSAGE, parse_mode='Markdown')
     return ConversationHandler.END

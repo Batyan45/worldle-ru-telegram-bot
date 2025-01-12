@@ -1,7 +1,7 @@
 """Core game logic and state management."""
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Literal
 
 from src.config.settings import MAX_ATTEMPTS
 
@@ -93,6 +93,34 @@ def delete_game(word_setter_username: str, guesser_username: str) -> None:
     """
     if (word_setter_username, guesser_username) in games:
         del games[(word_setter_username, guesser_username)]
+
+
+def get_user_role(username: str) -> Optional[Literal["word_setter", "guesser", None]]:
+    """
+    Get the user's role in their current active game.
+    
+    Args:
+        username: The username to check.
+        
+    Returns:
+        Optional[Literal["word_setter", "guesser", None]]: The user's role in their active game,
+            or None if they are not in a game.
+    """
+    # Find an active game involving the user
+    game = next(
+        (g for (w_s_username, g_username), g in games.items()
+         if (w_s_username == username or g_username == username)
+         and g.state == 'waiting_for_guess'),
+        None
+    )
+    
+    if not game:
+        return None
+    
+    if username == game.word_setter_username:
+        return "word_setter"
+    else:
+        return "guesser"
 
 
 def get_feedback(secret_word: str, guess: str) -> Tuple[str, str, Set[str], Set[str]]:

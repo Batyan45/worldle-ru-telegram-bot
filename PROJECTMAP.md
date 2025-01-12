@@ -33,6 +33,7 @@ telegram-bot/
 ├── .env                    # Environment variables (not in VCS)
 ├── .env.example           # Example environment variables
 ├── .gitignore
+├── run.py                 # Run the bot
 ├── Dockerfile
 ├── README.md
 ├── PROJECTMAP.md          # This file

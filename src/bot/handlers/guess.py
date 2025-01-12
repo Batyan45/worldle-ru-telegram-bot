@@ -20,6 +20,7 @@ from src.config.strings import (
     TRY_AGAIN_MESSAGE
 )
 from src.bot.handlers.game import get_random_gif
+from src.bot.commands import update_user_commands
 
 
 async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -173,6 +174,14 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Update the last partner
         update_user_data(word_setter_username, word_setter_chat_id, guesser_username)
         update_user_data(guesser_username, update.message.chat_id, word_setter_username)
+
+        # Update commands for both players
+        await update_user_commands(update, context)
+        # Create a fake update for the word setter to update their commands
+        word_setter_update = Update(0)
+        word_setter_update._effective_user = type('User', (), {'username': word_setter_username})()
+        word_setter_update._effective_chat = type('Chat', (), {'id': word_setter_chat_id})()
+        await update_user_commands(word_setter_update, context)
     else:
         if attempt_number >= game.max_attempts:
             # Log the loss
@@ -198,6 +207,14 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             # Update the last partner
             update_user_data(word_setter_username, word_setter_chat_id, guesser_username)
             update_user_data(guesser_username, update.message.chat_id, word_setter_username)
+
+            # Update commands for both players
+            await update_user_commands(update, context)
+            # Create a fake update for the word setter to update their commands
+            word_setter_update = Update(0)
+            word_setter_update._effective_user = type('User', (), {'username': word_setter_username})()
+            word_setter_update._effective_chat = type('Chat', (), {'id': word_setter_chat_id})()
+            await update_user_commands(word_setter_update, context)
         else:
             remaining_attempts = game.max_attempts - attempt_number
             await update.message.reply_text(
