@@ -54,3 +54,9 @@ MESSAGE_RECEIVED = "**{sender_username}**: {message_text}"
 
 RUSSIAN_ALPHABET = set("АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ")
 ENGLISH_ALPHABET = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+ADDTRY_ADDED_MESSAGE = "Вы добавили одну дополнительную попытку угадывающему игроку."
+ADDTRY_RECEIVED_MESSAGE = "Загадывающий игрок добавил вам одну дополнительную попытку."
+
+SAY_ENTER_MESSAGE = "Введите сообщение, которое хотите отправить:"
+SAY_FAILED_TO_FIND_CHAT = "Не удалось найти чат другого игрока."

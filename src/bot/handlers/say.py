@@ -8,7 +8,9 @@ from src.core.game import games
 from src.core.user import user_data
 from src.config.strings import (
     NO_ACTIVE_GAME_MESSAGE_SAY,
-    MESSAGE_RECEIVED
+    MESSAGE_RECEIVED,
+    SAY_ENTER_MESSAGE,
+    SAY_FAILED_TO_FIND_CHAT
 )
 
 
@@ -51,7 +53,7 @@ async def say_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
             logging.warning(f"Failed to delete message: {e}")
     else:
         # If text is not provided, wait for the next message
-        await update.effective_message.reply_text("Enter the message you want to send:")
+        await update.effective_message.reply_text(SAY_ENTER_MESSAGE)
         return SAY_WAITING_FOR_MESSAGE
 
 
@@ -113,7 +115,7 @@ async def send_say_message(update: Update, context: ContextTypes.DEFAULT_TYPE, m
     receiver_chat_id = user_data.get(receiver_username, {}).get('chat_id')
 
     if not receiver_chat_id:
-        await update.effective_message.reply_text("Failed to find the chat of the other player.", parse_mode='Markdown')
+        await update.effective_message.reply_text(SAY_FAILED_TO_FIND_CHAT, parse_mode='Markdown')
         return
 
     sender_chat_id = update.effective_chat.id
