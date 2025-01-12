@@ -1,210 +1,308 @@
-import unittest
-from unittest.mock import AsyncMock, patch
+"""Test scenarios for the Telegram Wordle bot game."""
+from typing import TYPE_CHECKING, AsyncGenerator, Dict, Tuple
+
+import pytest
 from telegram import Update, User, Message, Chat
-from telegram.ext import ContextTypes
-from main import start, new_game, set_player, receive_word, cancel, guess_word, handle_last_partner
-from game import games, delete_game
-from user import user_data, save_user_data
+from telegram.ext import ContextTypes, CallbackContext, Application, ExtBot
 
-class TestGameScenarios(unittest.IsolatedAsyncioTestCase):
-    """Тестовые сценарии для Telegram-бота Wordle"""
+from src.bot.handlers.game import set_player, receive_word, cancel_command
+from src.bot.handlers.guess import handle_guess
+from src.bot.handlers.start import start_command
+from src.core.game import Game, games, create_game, delete_game, get_feedback
+from src.core.user import user_data
+from src.config.strings import (
+    INVALID_WORD_MESSAGE,
+    NO_ACTIVE_GAME_MESSAGE,
+    OUT_OF_ATTEMPTS_MESSAGE,
+    GUESSER_WIN_MESSAGE,
+    WORD_SETTER_WIN_MESSAGE,
+    WORD_SETTER_LOSS_MESSAGE,
+    TRY_AGAIN_MESSAGE
+)
 
-    async def test_game_cancellation_at_any_stage(self):
-        """Проверка отмены игры на различных этапах"""
-        # Мокаем данные обновления и контекста
-        update = AsyncMock()
-        update.message = AsyncMock()
-        context = AsyncMock()
-        context.bot = AsyncMock()
+if TYPE_CHECKING:
+    from _pytest.capture import CaptureFixture
+    from _pytest.fixtures import FixtureRequest
+    from _pytest.logging import LogCaptureFixture
+    from _pytest.monkeypatch import MonkeyPatch
+    from pytest_mock.plugin import MockerFixture
 
-        update.message.text = '/cancel'
-        update.message.from_user.username = 'tester'
-        await cancel(update, context)
-        update.message.reply_text.assert_called_with('Игра прервана.', parse_mode='Markdown')
 
-    async def test_correct_game_flow(self):
-        """Проверка корректного прохождения игры"""
-        # Симулируем двух пользователей
-        user1 = User(id=1, first_name='Player1', username='player1', is_bot=False)
-        user2 = User(id=2, first_name='Player2', username='player2', is_bot=False)
+@pytest.fixture
+def mock_bot(mocker: "MockerFixture") -> ExtBot:
+    """Create a mock bot for testing."""
+    mock_bot = mocker.Mock(spec=ExtBot)
+    mock_bot.send_message = mocker.AsyncMock()
+    mock_bot.delete_message = mocker.AsyncMock()
+    mock_bot.set_my_commands = mocker.AsyncMock()
+    return mock_bot
 
-        # Мокаем обновления и контексты
-        update1 = AsyncMock()
-        context1 = AsyncMock()
-        update2 = AsyncMock()
-        context2 = AsyncMock()
 
-        # Пользователь 1 отправляет команду /start
-        update1.message.from_user = user1
-        update1.message.chat_id = 1001
-        update1.message.text = '/start'
-        await start(update1, context1)
+@pytest.fixture
+def mock_context(mock_bot: ExtBot) -> CallbackContext:
+    """Create a mock Context object for testing."""
+    mock_application = Application.builder().bot(mock_bot).build()
+    
+    # Create a context with empty dictionaries for data storage
+    context = CallbackContext(mock_application)
+    context._user_data = {}  # Use protected attribute to bypass immutability
+    context._chat_data = {}
+    context._bot_data = {}
+    return context
 
-        # Пользователь 2 отправляет команду /start
-        update2.message.from_user = user2
-        update2.message.chat_id = 1002
-        update2.message.text = '/start'
-        await start(update2, context2)
 
-        # Пользователь 1 начинает новую игру с пользователем 2
-        update1.message.text = '/new_game'
-        await new_game(update1, context1)
+@pytest.fixture(autouse=True)
+async def cleanup_games() -> AsyncGenerator[None, None]:
+    """Clean up games dictionary before and after each test."""
+    games.clear()
+    user_data.clear()
+    yield
+    games.clear()
+    user_data.clear()
 
-        # Пользователь 1 устанавливает второго игрока
-        update1.message.text = '@player2'
-        context1.user_data = {}
-        await set_player(update1, context1)
 
-        # Пользователь 1 загадывает слово
-        update1.message.text = 'слово'
-        await receive_word(update1, context1)
+def create_message(chat: Chat, user: User, text: str, bot: ExtBot) -> Message:
+    """Create a Message object with the given parameters."""
+    return Message(
+        message_id=1,
+        date=None,
+        chat=chat,
+        from_user=user,
+        text=text,
+        bot=bot
+    )
 
-        # Пользователь 2 делает догадку
-        update2.message.from_user = user2
-        update2.message.text = 'слово'
-        await guess_word(update2, context2)
 
-        # Проверяем, что игра завершена и удалена
-        self.assertNotIn(('player1', 'player2'), games)
+@pytest.mark.asyncio
+async def test_game_creation_and_word_setting(
+    mock_bot: ExtBot,
+    mock_context: CallbackContext
+) -> None:
+    """
+    Test game creation and word setting process.
+    
+    Args:
+        mock_bot: Mock bot instance
+        mock_context: Mock Context object
+    """
+    # Setup players
+    word_setter = User(1, "word_setter", False, username="word_setter")
+    guesser = User(2, "guesser", False, username="guesser")
+    chat = Chat(1001, "private")
+    
+    # Mock user data
+    user_data["word_setter"] = {"chat_id": 1001}
+    user_data["guesser"] = {"chat_id": 1002}
+    
+    mock_context._user_data = {
+        "word_setter_username": "word_setter",
+        "guesser_username": "guesser"
+    }
+    
+    # Set second player
+    message = create_message(chat, word_setter, "@guesser", mock_bot)
+    mock_update = Update(1, message=message)
+    await set_player(mock_update, mock_context)
+    
+    assert ("word_setter", "guesser") in games
+    game = games[("word_setter", "guesser")]
+    assert game.state == "waiting_for_word"
+    
+    # Set word
+    message = create_message(chat, word_setter, "слово", mock_bot)
+    mock_update = Update(1, message=message)
+    await receive_word(mock_update, mock_context)
+    
+    game = games[("word_setter", "guesser")]
+    assert game.state == "waiting_for_guess"
+    assert game.secret_word == "слово"
+    assert game.language == "russian"
 
-    async def test_game_cancellation_during_word_setting(self):
-        """Проверка отмены игры во время задания слова"""
-        # Симулируем пользователя
-        user = User(id=1, first_name='Player', username='player', is_bot=False)
 
-        # Мокаем обновления и контекст
-        update = AsyncMock()
-        context = AsyncMock()
+@pytest.mark.asyncio
+async def test_word_guessing_process(
+    mock_bot: ExtBot,
+    mock_context: CallbackContext
+) -> None:
+    """
+    Test the word guessing process including feedback.
+    
+    Args:
+        mock_bot: Mock bot instance
+        mock_context: Mock Context object
+    """
+    # Setup game
+    game = Game(
+        word_setter_username="word_setter",
+        guesser_username="guesser",
+        word_setter_chat_id=1001,
+        guesser_chat_id=1002
+    )
+    game.secret_word = "слово"
+    game.state = "waiting_for_guess"
+    game.language = "russian"
+    games[("word_setter", "guesser")] = game
+    
+    # Setup guesser
+    guesser = User(2, "guesser", False, username="guesser")
+    chat = Chat(1002, "private")
+    
+    # Test incorrect guess
+    message = create_message(chat, guesser, "книга", mock_bot)
+    mock_update = Update(1, message=message)
+    await handle_guess(mock_update, mock_context)
+    
+    game = games[("word_setter", "guesser")]
+    assert len(game.attempts) == 1
+    assert game.state == "waiting_for_guess"
+    
+    # Test correct guess
+    message = create_message(chat, guesser, "слово", mock_bot)
+    mock_update = Update(1, message=message)
+    await handle_guess(mock_update, mock_context)
+    
+    assert ("word_setter", "guesser") not in games  # Game should be deleted after win
 
-        # Пользователь начинает новую игру
-        update.message.from_user = user
-        update.message.chat_id = 1001
-        update.message.text = '/new_game'
-        await new_game(update, context)
 
-        # Отмена игры
-        update.message.text = '/cancel'
-        await cancel(update, context)
+@pytest.mark.asyncio
+async def test_game_cancellation(
+    mock_bot: ExtBot,
+    mock_context: CallbackContext
+) -> None:
+    """
+    Test game cancellation at different stages.
+    
+    Args:
+        mock_bot: Mock bot instance
+        mock_context: Mock Context object
+    """
+    # Setup game
+    game = Game(
+        word_setter_username="word_setter",
+        guesser_username="guesser",
+        word_setter_chat_id=1001,
+        guesser_chat_id=1002
+    )
+    game.secret_word = "слово"
+    game.state = "waiting_for_guess"
+    games[("word_setter", "guesser")] = game
+    
+    # Cancel game as word setter
+    word_setter = User(1, "word_setter", False, username="word_setter")
+    chat = Chat(1001, "private")
+    message = create_message(chat, word_setter, "/cancel", mock_bot)
+    mock_update = Update(1, message=message)
+    
+    await cancel_command(mock_update, mock_context)
+    
+    assert ("word_setter", "guesser") not in games
 
-        # Проверяем, что игра не существует
-        self.assertNotIn(('player', context.user_data.get('guesser_username')), games)
 
-    async def test_two_players_starting_simultaneous_games(self):
-        """Проверка ситуации, когда два игрока начинают игру одновременно"""
-        # Симулируем двух пользователей
-        user1 = User(id=1, first_name='Player1', username='player1', is_bot=False)
-        user2 = User(id=2, first_name='Player2', username='player2', is_bot=False)
+@pytest.mark.asyncio
+async def test_feedback_mechanism() -> None:
+    """Test the feedback mechanism for guesses."""
+    secret_word = "слово"
+    test_cases = [
+        ("книга", "КНИГА", "🟩🟨🟨⬜⬜"),  # First letter matches, 'и' and 'а' are in wrong positions
+        ("солнц", "СОЛНЦ", "🟩⬜⬜⬜⬜"),  # Only first letter matches
+        ("слово", "СЛОВО", "🟩🟩🟩🟩🟩"),  # Exact match
+    ]
+    
+    for guess, expected_result, expected_feedback in test_cases:
+        result, feedback, _, _ = get_feedback(secret_word, guess)
+        assert result == expected_result
+        assert feedback == expected_feedback
 
-        # Мокаем обновления и контексты
-        update1 = AsyncMock()
-        context1 = AsyncMock()
-        update2 = AsyncMock()
-        context2 = AsyncMock()
 
-        # Оба пользователя отправляют команду /start
-        update1.message.from_user = user1
-        update1.message.chat_id = 1001
-        await start(update1, context1)
+@pytest.mark.asyncio
+async def test_max_attempts_limit(
+    mock_bot: ExtBot,
+    mock_context: CallbackContext
+) -> None:
+    """
+    Test that the game ends after maximum attempts are reached.
+    
+    Args:
+        mock_bot: Mock bot instance
+        mock_context: Mock Context object
+    """
+    # Setup game
+    game = Game(
+        word_setter_username="word_setter",
+        guesser_username="guesser",
+        word_setter_chat_id=1001,
+        guesser_chat_id=1002
+    )
+    game.secret_word = "слово"
+    game.state = "waiting_for_guess"
+    game.language = "russian"
+    games[("word_setter", "guesser")] = game
+    
+    # Setup guesser
+    guesser = User(2, "guesser", False, username="guesser")
+    chat = Chat(1002, "private")
+    
+    # Make max_attempts incorrect guesses
+    for _ in range(game.max_attempts):
+        message = create_message(chat, guesser, "книга", mock_bot)
+        mock_update = Update(1, message=message)
+        await handle_guess(mock_update, mock_context)
+    
+    assert ("word_setter", "guesser") not in games  # Game should be deleted after max attempts
 
-        update2.message.from_user = user2
-        update2.message.chat_id = 1002
-        await start(update2, context2)
 
-        # Оба пользователя начинают новую игру
-        update1.message.text = '/new_game'
-        await new_game(update1, context1)
-
-        update2.message.text = '/new_game'
-        await new_game(update2, context2)
-
-        # Оба устанавливают друг друга как соперников
-        update1.message.text = '@player2'
-        context1.user_data = {}
-        await set_player(update1, context1)
-
-        update2.message.text = '@player1'
-        context2.user_data = {}
-        await set_player(update2, context2)
-
-        # Проверяем, что созданы две отдельные игры
-        self.assertIn(('player1', 'player2'), games)
-        self.assertIn(('player2', 'player1'), games)
-
-    async def test_invalid_word_input(self):
-        """Проверка ввода некорректного слова"""
-        # Симулируем пользователя
-        user = User(id=1, first_name='Player', username='player', is_bot=False)
-
-        # Мокаем обновление и контекст
-        update = AsyncMock()
-        context = AsyncMock()
-
-        # Пользователь отправляет некорректное слово
-        update.message.from_user = user
-        update.message.text = 'сл'
-        await receive_word(update, context)
-
-        # Проверяем, что вывелось сообщение об ошибке
-        update.message.reply_text.assert_called_with('Слово должно состоять из 5 букв. Попробуй снова.', parse_mode='Markdown')
-
-    async def test_guess_without_active_game(self):
-        """Проверка попытки догадки без активной игры"""
-        # Симулируем пользователя
-        user = User(id=1, first_name='Player', username='player', is_bot=False)
-
-        # Мокаем обновление и контекст
-        update = AsyncMock()
-        context = AsyncMock()
-
-        # Пользователь пытается угадать слово без активной игры
-        update.message.from_user = user
-        update.message.text = 'слово'
-        await guess_word(update, context)
-
-        # Проверяем, что вывелось сообщение об отсутствии активной игры
-        update.message.reply_text.assert_called_with('У вас нет активных игр. Начните новую с помощью команды /new_game.', parse_mode='Markdown')
-
-    async def test_game_flow_with_incorrect_guesses(self):
-        """Проверка игры с неправильными догадками и исчерпанием попыток"""
-        # Симулируем двух пользователей
-        user1 = User(id=1, first_name='Player1', username='player1', is_bot=False)
-        user2 = User(id=2, first_name='Player2', username='player2', is_bot=False)
-
-        # Мокаем обновления и контексты
-        update1 = AsyncMock()
-        context1 = AsyncMock()
-        update2 = AsyncMock()
-        context2 = AsyncMock()
-
-        # Пользователи начинают игру и устанавливают друг друга
-        update1.message.from_user = user1
-        update1.message.chat_id = 1001
-        update2.message.from_user = user2
-        update2.message.chat_id = 1002
-
-        # /start команды
-        update1.message.text = '/start'
-        await start(update1, context1)
-        update2.message.text = '/start'
-        await start(update2, context2)
-
-        # /new_game команды
-        update1.message.text = '/new_game'
-        await new_game(update1, context1)
-        update1.message.text = '@player2'
-        context1.user_data = {}
-        await set_player(update1, context1)
-        update1.message.text = 'слово'
-        await receive_word(update1, context1)
-
-        # Пользователь 2 делает 6 неправильных догадок
-        update2.message.from_user = user2
-        for i in range(6):
-            update2.message.text = 'невер'
-            await guess_word(update2, context2)
-
-        # Проверяем, что игра удалена после 6 попыток
-        self.assertNotIn(('player1', 'player2'), games)
-
-if __name__ == '__main__':
-    unittest.main()
+@pytest.mark.asyncio
+async def test_invalid_inputs(
+    mock_bot: ExtBot,
+    mock_context: CallbackContext
+) -> None:
+    """
+    Test handling of invalid inputs.
+    
+    Args:
+        mock_bot: Mock bot instance
+        mock_context: Mock Context object
+    """
+    # Setup game for word setting
+    game = Game(
+        word_setter_username="word_setter",
+        guesser_username="guesser",
+        word_setter_chat_id=1001,
+        guesser_chat_id=1002
+    )
+    games[("word_setter", "guesser")] = game
+    
+    # Setup word setter
+    word_setter = User(1, "word_setter", False, username="word_setter")
+    chat = Chat(1001, "private")
+    
+    mock_context._user_data = {
+        "word_setter_username": "word_setter",
+        "guesser_username": "guesser"
+    }
+    
+    # Test invalid word length
+    message = create_message(chat, word_setter, "сл", mock_bot)
+    mock_update = Update(1, message=message)
+    await receive_word(mock_update, mock_context)
+    assert game.secret_word == ""  # Word should not be set
+    
+    # Test mixed language
+    message = create_message(chat, word_setter, "слоvo", mock_bot)
+    mock_update = Update(1, message=message)
+    await receive_word(mock_update, mock_context)
+    assert game.secret_word == ""  # Word should not be set
+    
+    # Set valid word and test invalid guess
+    game.secret_word = "слово"
+    game.state = "waiting_for_guess"
+    
+    # Setup guesser
+    guesser = User(2, "guesser", False, username="guesser")
+    chat = Chat(1002, "private")
+    
+    # Test invalid guess length
+    message = create_message(chat, guesser, "сло", mock_bot)
+    mock_update = Update(1, message=message)
+    await handle_guess(mock_update, mock_context)
+    assert len(game.attempts) == 0  # Guess should not be recorded
