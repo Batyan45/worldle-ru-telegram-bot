@@ -3,6 +3,7 @@
 import logging
 import random
 from pathlib import Path
+from typing import Optional
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 
@@ -45,7 +46,7 @@ from src.bot.commands import update_user_commands
 WAITING_FOR_SECOND_PLAYER, WAITING_FOR_WORD = range(2)
 
 
-def get_random_gif(directory: str) -> str | None:
+def get_random_gif(directory: str) -> Optional[str]:
     """
     Get a random GIF file from the specified directory.
     
@@ -53,7 +54,7 @@ def get_random_gif(directory: str) -> str | None:
         directory: Path to the directory containing GIFs.
         
     Returns:
-        str | None: Path to the random GIF file or None if no GIFs found.
+        Optional[str]: Path to the random GIF file or None if no GIFs found.
     """
     try:
         gif_files = list(Path(directory).glob('*.gif'))
