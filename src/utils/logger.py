@@ -4,6 +4,8 @@ import logging
 from pathlib import Path
 from typing import Optional
 
+from src.config.settings import GAME_LOGS_FILE
+
 
 def setup_logger(log_file: Optional[Path] = None) -> tuple[logging.Logger, logging.Logger]:
     """
@@ -23,7 +25,7 @@ def setup_logger(log_file: Optional[Path] = None) -> tuple[logging.Logger, loggi
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
     # Create handlers
-    log_file = log_file or Path('game_logs.log')
+    log_file = log_file or Path(GAME_LOGS_FILE)
     file_handler = logging.FileHandler(log_file)
     file_handler.setFormatter(formatter)
 

@@ -7,7 +7,7 @@ from telegram.ext import ContextTypes
 
 from src.core.game import get_feedback, games, delete_game
 from src.core.user import user_data, update_user_data
-from src.config.settings import GIFS_DIR
+from src.config.settings import ENGLISH_ALPHABET, GIFS_DIR, RUSSIAN_ALPHABET
 from src.config.strings import (
     NO_ACTIVE_GAME_MESSAGE,
     INVALID_GUESS_MESSAGE,
@@ -104,9 +104,9 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     # Form the alphabet
     if language == 'russian':
-        alphabet = set('абвгдеёжзийклмнопрстуфхцчшщъыьэюя')
+        alphabet = RUSSIAN_ALPHABET
     else:
-        alphabet = set('abcdefghijklmnopqrstuvwxyz')
+        alphabet = ENGLISH_ALPHABET
     correct_letters_display = " ".join(sorted(game.correct_letters))
     used_letters_display = " ".join(sorted(game.used_letters))
     remaining_letters = alphabet - game.correct_letters - game.used_letters

@@ -23,5 +23,5 @@ USER_DATA_FILE: Final[Path] = BASE_DIR / 'user_data.json'
 GAME_LOGS_FILE: Final[Path] = BASE_DIR / 'game_logs.log'
 
 # Alphabets
-RUSSIAN_ALPHABET: Final[set[str]] = set('абвгдеёжзийклмнопрстуфхцчшщъыьэюя')
-ENGLISH_ALPHABET: Final[set[str]] = set('abcdefghijklmnopqrstuvwxyz') 
+RUSSIAN_ALPHABET: Final[set[str]] = set('АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ')
+ENGLISH_ALPHABET: Final[set[str]] = set('ABCDEFGHIJKLMNOPQRSTUVWXYZ') 

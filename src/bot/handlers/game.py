@@ -15,7 +15,7 @@ from src.core.game import (
     games
 )
 from src.core.user import user_data, update_user_data
-from src.config.settings import GIFS_DIR
+from src.config.settings import GIFS_DIR, MAX_WORD_LENGTH, MIN_WORD_LENGTH
 from src.config.strings import (
     NEW_GAME_MESSAGE,
     NO_USERNAME_NEW_GAME_MESSAGE,
@@ -153,7 +153,7 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         int: The next conversation state.
     """
     word = update.message.text.strip().lower()
-    if len(word) not in range(4, 9) or not word.isalpha():
+    if len(word) not in range(MIN_WORD_LENGTH, MAX_WORD_LENGTH + 1) or not word.isalpha():
         await update.message.reply_text(INVALID_WORD_MESSAGE, parse_mode='Markdown')
         return WAITING_FOR_WORD
 
