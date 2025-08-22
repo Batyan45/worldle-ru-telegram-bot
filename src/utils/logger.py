@@ -24,9 +24,10 @@ def setup_logger(log_file: Optional[Path] = None) -> tuple[logging.Logger, loggi
     # Create a formatter
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
-    # Create handlers
-    log_file = log_file or Path(GAME_LOGS_FILE)
-    file_handler = logging.FileHandler(log_file)
+    log_path = Path(log_file) if log_file else Path(GAME_LOGS_FILE)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    file_handler = logging.FileHandler(log_path)
     file_handler.setFormatter(formatter)
 
     # Add handlers to logger
@@ -40,7 +41,6 @@ def setup_logger(log_file: Optional[Path] = None) -> tuple[logging.Logger, loggi
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         level=logging.INFO
     )
-    
     system_logger = logging.getLogger('system')
-    
-    return game_logger, system_logger 
+
+    return game_logger, system_logger

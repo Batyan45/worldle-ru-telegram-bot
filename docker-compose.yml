@@ -1,12 +1,18 @@
-version: '3.8'
+version: "3.8"
 
 services:
   bot:
-    build: .
-    volumes:
-      - bot_data:/app/data
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: worldle-ru-bot
+    restart: unless-stopped
     environment:
-      - TELEGRAM_BOT_TOKEN=your_token_here
-
-volumes:
-  bot_data:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      DATA_DIR: /app/data
+      USER_DATA_FILE: /app/data/user_data.json
+      LOGS_DIR: /app/data/logs
+      GAME_LOGS_FILE: /app/data/logs/game_logs.log
+      TZ: ${TZ:-Europe/Moscow}
+    volumes:
+      - ./data:/app/data
