@@ -15,4 +15,4 @@ services:
       GAME_LOGS_FILE: /app/data/logs/game_logs.log
       TZ: ${TZ:-Europe/Moscow}
     volumes:
-      - ./data:/app/data
+      - ${DATA_PATH:-./data}:/app/data
