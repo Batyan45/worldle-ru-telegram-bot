@@ -45,6 +45,8 @@ from src.bot.commands import update_user_commands
 # Conversation stages
 WAITING_FOR_SECOND_PLAYER, WAITING_FOR_WORD = range(2)
 
+game_log = logging.getLogger('game')
+
 
 def get_random_gif(directory: str) -> Optional[str]:
     """
@@ -175,7 +177,7 @@ async def receive_word(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         game.state = 'waiting_for_guess'
         
         # Log the start of the game
-        logging.info(
+        game_log.info(
             f"Game started - Word setter: {word_setter_username}, "
             f"Guesser: {guesser_username}, "
             f"Secret word: {word}, "

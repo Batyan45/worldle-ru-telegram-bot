@@ -27,7 +27,7 @@ def setup_logger(log_file: Optional[Path] = None) -> tuple[logging.Logger, loggi
     log_path = Path(log_file) if log_file else Path(GAME_LOGS_FILE)
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    file_handler = logging.FileHandler(log_path)
+    file_handler = logging.FileHandler(log_path, encoding='utf-8')
     file_handler.setFormatter(formatter)
 
     # Add handlers to logger

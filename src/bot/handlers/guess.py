@@ -24,6 +24,8 @@ from src.bot.handlers.game import get_random_gif
 from src.bot.commands import update_user_commands
 
 
+game_log = logging.getLogger('game')
+
 async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Handle player's guesses.
@@ -74,7 +76,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             return
 
     # Add logging for the attempt
-    logging.info(
+    game_log.info(
         f"Guess attempt - Player: {guesser_username}, "
         f"Secret word: {secret_word}, "
         f"Guess: {message}, "
@@ -174,7 +176,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     if message.replace('ё', 'е').replace('Ё', 'Е') == secret_word.replace('ё', 'е').replace('Ё', 'Е'):
         # Log the successful completion of the game
-        logging.info(
+        game_log.info(
             f"Game won - Guesser: {guesser_username} won against {word_setter_username}, "
             f"Secret word: {secret_word}, "
             f"Attempts used: {attempt_number}/{game.max_attempts}"
@@ -231,7 +233,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     else:
         if attempt_number >= game.max_attempts:
             # Log the loss
-            logging.info(
+            game_log.info(
                 f"Game lost - Guesser: {guesser_username} lost against {word_setter_username}, "
                 f"Secret word: {secret_word}, "
                 f"All {game.max_attempts} attempts used"
